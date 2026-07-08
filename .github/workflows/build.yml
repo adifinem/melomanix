@@ -34,6 +34,12 @@ jobs:
       - name: Build VST3
         run: cmake --build build --config Release --target Melomanix_VST3
 
+      - name: Run engine tests
+        if: runner.os == 'Linux'
+        run: |
+          cmake --build build --config Release --target MelomanixTests
+          ./build/MelomanixTests_artefacts/Release/MelomanixTests
+
       - name: Upload VST3 artifact
         uses: actions/upload-artifact@v4
         with:

@@ -31,7 +31,11 @@ juce_add_plugin(Melomanix
 
 target_sources(Melomanix PRIVATE
     src/PluginProcessor.cpp
-    src/PluginEditor.cpp)
+    src/PluginEditor.cpp
+    src/engine/GraphTypes.cpp
+    src/engine/Nodes.cpp
+    src/engine/GraphEngine.cpp
+    src/model/GraphModel.cpp)
 
 target_compile_definitions(Melomanix PUBLIC
     JUCE_WEB_BROWSER=0
@@ -45,4 +49,21 @@ target_link_libraries(Melomanix
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
+        juce::juce_recommended_warning_flags)
+
+juce_add_console_app(MelomanixTests PRODUCT_NAME "MelomanixTests")
+
+target_sources(MelomanixTests PRIVATE
+    test/EngineTests.cpp
+    src/engine/GraphTypes.cpp
+    src/engine/Nodes.cpp
+    src/engine/GraphEngine.cpp
+    src/model/GraphModel.cpp)
+
+target_link_libraries(MelomanixTests
+    PRIVATE
+        juce::juce_data_structures
+        juce::juce_dsp
+    PUBLIC
+        juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)

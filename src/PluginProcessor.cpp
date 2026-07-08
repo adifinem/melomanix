@@ -7,28 +7,47 @@ MelomanixProcessor::MelomanixProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMS", createParameterLayout())
 {
-    gainParam = apvts.getRawParameterValue ("gain");
+    for (int i = 0; i < numMacros; ++i)
+        macroValues.push_back (apvts.getRawParameterValue ("macro" + juce::String (i + 1)));
+
+    attachToModel();
+    rebuildGraph();
+}
+
+MelomanixProcessor::~MelomanixProcessor()
+{
+    graphModel.state().removeListener (this);
+    cancelPendingUpdate();
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout MelomanixProcessor::createParameterLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
 
-    layout.add (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID { "gain", 1 },
-        "Gain",
-        juce::NormalisableRange<float> (-60.0f, 12.0f, 0.1f),
-        0.0f,
-        juce::AudioParameterFloatAttributes().withLabel ("dB")));
+    for (int i = 1; i <= numMacros; ++i)
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { "macro" + juce::String (i), 1 },
+            "Macro " + juce::String (i),
+            juce::NormalisableRange<float> (0.0f, 1.0f),
+            0.0f));
 
     return layout;
 }
 
-void MelomanixProcessor::prepareToPlay (double sampleRate, int)
+void MelomanixProcessor::attachToModel()
 {
-    smoothedGain.reset (sampleRate, 0.02);
-    smoothedGain.setCurrentAndTargetValue (
-        juce::Decibels::decibelsToGain (gainParam->load()));
+    graphModel.state().addListener (this);
+}
+
+void MelomanixProcessor::rebuildGraph()
+{
+    engine.setGraph (melo::compileGraph (graphModel.state(), macroValues));
+}
+
+void MelomanixProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+{
+    currentSampleRate = sampleRate;
+    engine.prepare (sampleRate, samplesPerBlock);
 }
 
 bool MelomanixProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -46,20 +65,61 @@ void MelomanixProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     for (int ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
         buffer.clear (ch, 0, buffer.getNumSamples());
 
-    smoothedGain.setTargetValue (juce::Decibels::decibelsToGain (gainParam->load()));
-    smoothedGain.applyGain (buffer, buffer.getNumSamples());
+    // Prefer the host's transport time so LFO phase follows the project
+    // playhead; fall back to a free-running clock (standalone, or hosts
+    // that don't report position).
+    double seconds = internalClockSeconds;
+    bool haveHostTime = false;
+
+    if (auto* playHead = getPlayHead())
+        if (auto position = playHead->getPosition())
+            if (auto time = position->getTimeInSeconds())
+            {
+                seconds = *time;
+                haveHostTime = true;
+            }
+
+    if (! haveHostTime)
+        internalClockSeconds += buffer.getNumSamples() / currentSampleRate;
+
+    lastPlayheadSeconds.store (seconds);
+
+    melo::ProcessContext ctx;
+    ctx.sampleRate = currentSampleRate;
+    ctx.maxBlockSize = buffer.getNumSamples();
+    ctx.numSamples = buffer.getNumSamples();
+    ctx.playheadSeconds = seconds;
+
+    engine.process (buffer, ctx);
 }
 
 void MelomanixProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    if (auto xml = apvts.copyState().createXml())
+    juce::ValueTree root ("MELOMANIX");
+    root.addChild (apvts.copyState(), -1, nullptr);
+    root.addChild (graphModel.state().createCopy(), -1, nullptr);
+
+    if (auto xml = root.createXml())
         copyXmlToBinary (*xml, destData);
 }
 
 void MelomanixProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    if (auto xml = getXmlFromBinary (data, sizeInBytes))
-        apvts.replaceState (juce::ValueTree::fromXml (*xml));
+    auto xml = getXmlFromBinary (data, sizeInBytes);
+    if (xml == nullptr)
+        return;
+
+    auto root = juce::ValueTree::fromXml (*xml);
+    if (! root.hasType (juce::Identifier ("MELOMANIX")))
+        return;
+
+    if (auto params = root.getChildWithName (apvts.state.getType()); params.isValid())
+        apvts.replaceState (params);
+
+    graphModel.state().removeListener (this);
+    graphModel.replaceState (root.getChildWithName (melo::ids::graph).createCopy());
+    attachToModel();
+    rebuildGraph();
 }
 
 juce::AudioProcessorEditor* MelomanixProcessor::createEditor()

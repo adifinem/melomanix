@@ -2,6 +2,9 @@
 
 #include "PluginProcessor.h"
 
+// Interim editor for the engine-core milestone: the macro strip is real
+// (these are the actual host parameters), the graph and timeline panes are
+// placeholders to be built next.
 class MelomanixEditor : public juce::AudioProcessorEditor
 {
 public:
@@ -13,9 +16,14 @@ public:
 private:
     MelomanixProcessor& processor;
 
-    juce::Slider gainSlider;
-    juce::Label gainLabel;
-    juce::AudioProcessorValueTreeState::SliderAttachment gainAttachment;
+    struct MacroDial
+    {
+        juce::Slider slider;
+        juce::Label label;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
+    };
+
+    std::array<MacroDial, MelomanixProcessor::numMacros> macros;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MelomanixEditor)
 };

@@ -1,0 +1,73 @@
+#pragma once
+
+#include <juce_core/juce_core.h>
+#include <juce_data_structures/juce_data_structures.h>
+
+namespace melo
+{
+
+enum class NodeType
+{
+    audioIn,
+    audioOut,
+    eq,
+    delay,
+    lfo,
+    macro
+};
+
+// Controllers emit a block-rate control value in [0, 1]; DSP nodes process audio.
+// IO nodes bridge the host's buffers into the graph.
+enum class NodeKind { io, dsp, controller };
+
+struct ParamSpec
+{
+    const char* id;
+    const char* name;
+    float min, max, def;
+    float skew = 1.0f;   // <1 gives finer resolution at the low end (freq/time params)
+
+    float normalise (float value) const
+    {
+        auto proportion = juce::jlimit (0.0f, 1.0f, (value - min) / (max - min));
+        return juce::exactlyEqual (skew, 1.0f) ? proportion : std::pow (proportion, skew);
+    }
+
+    float denormalise (float norm) const
+    {
+        norm = juce::jlimit (0.0f, 1.0f, norm);
+        if (! juce::exactlyEqual (skew, 1.0f))
+            norm = std::pow (norm, 1.0f / skew);
+        return min + norm * (max - min);
+    }
+};
+
+juce::String nodeTypeToString (NodeType);
+NodeType nodeTypeFromString (const juce::String&);
+NodeKind kindOf (NodeType);
+const std::vector<ParamSpec>& paramSpecsFor (NodeType);
+
+// ValueTree schema identifiers. The graph is stored as flat nodes + edge list,
+// nodes referenced by integer id only — a constraint from the spec so that
+// subgraph collapsing can be retrofitted without a data-model rewrite.
+namespace ids
+{
+    inline const juce::Identifier graph      { "GRAPH" };
+    inline const juce::Identifier node       { "NODE" };
+    inline const juce::Identifier conn       { "CONN" };
+    inline const juce::Identifier nodeId     { "id" };
+    inline const juce::Identifier type       { "type" };
+    inline const juce::Identifier posX       { "x" };
+    inline const juce::Identifier posY       { "y" };
+    inline const juce::Identifier param      { "PARAM" };
+    inline const juce::Identifier paramId    { "pid" };
+    inline const juce::Identifier value      { "value" };
+    inline const juce::Identifier srcNode    { "src" };
+    inline const juce::Identifier dstNode    { "dst" };
+    inline const juce::Identifier dstParam   { "dstParam" };  // set => mod connection, absent => audio
+    inline const juce::Identifier depth      { "depth" };
+    inline const juce::Identifier nextNodeId { "nextNodeId" };
+    inline const juce::Identifier macroIndex { "macroIndex" };
+}
+
+} // namespace melo
