@@ -4,6 +4,9 @@ A VST3 plugin where modulation controllers (LFOs, macros, curves) and DSP
 effects are peer nodes in a Blender-style node graph, with a fixed
 always-visible timeline pane. Early development.
 
+**New here? Read [GUIDE.md](GUIDE.md)** — a hands-on walkthrough of every
+feature, organized by release so you can see what's new and how to use it.
+
 Current state (v0): pan/zoom node graph with drag-to-connect cables; LFO,
 3-band EQ and delay nodes; controller outputs patch into DSP params *and*
 other controllers' params; 8 host-automatable macros with drag-to-assign;
