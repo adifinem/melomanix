@@ -45,7 +45,12 @@ public:
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override { triggerAsyncUpdate(); }
+    void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier& property) override
+    {
+        // Node positions are cosmetic; don't recompile the audio graph for them.
+        if (property != melo::ids::posX && property != melo::ids::posY)
+            triggerAsyncUpdate();
+    }
     void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override { triggerAsyncUpdate(); }
     void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree&, int) override { triggerAsyncUpdate(); }
     void handleAsyncUpdate() override { rebuildGraph(); }

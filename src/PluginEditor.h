@@ -1,11 +1,15 @@
 #pragma once
 
 #include "PluginProcessor.h"
+#include "ui/GraphCanvas.h"
+#include "ui/TimelinePane.h"
+#include "ui/MacroStrip.h"
 
-// Interim editor for the engine-core milestone: the macro strip is real
-// (these are the actual host parameters), the graph and timeline panes are
-// placeholders to be built next.
-class MelomanixEditor : public juce::AudioProcessorEditor
+// Fixed panes per the spec: macro strip (top), node graph (centre, largest),
+// timeline (bottom). Nothing floats. The editor is the drag-and-drop
+// container so macro grips can drop onto node parameter rows.
+class MelomanixEditor : public juce::AudioProcessorEditor,
+                        public juce::DragAndDropContainer
 {
 public:
     explicit MelomanixEditor (MelomanixProcessor&);
@@ -16,14 +20,10 @@ public:
 private:
     MelomanixProcessor& processor;
 
-    struct MacroDial
-    {
-        juce::Slider slider;
-        juce::Label label;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
-    };
-
-    std::array<MacroDial, MelomanixProcessor::numMacros> macros;
+    melo::SelectionModel selection;
+    melo::MacroStrip macroStrip;
+    melo::GraphCanvas graphCanvas;
+    melo::TimelinePane timelinePane;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MelomanixEditor)
 };

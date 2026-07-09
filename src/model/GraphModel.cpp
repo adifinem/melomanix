@@ -90,6 +90,26 @@ NodeType GraphModel::getNodeType (const juce::ValueTree& node) const
     return nodeTypeFromString (node.getProperty (ids::type).toString());
 }
 
+void GraphModel::setNodePosition (int nodeId, float x, float y)
+{
+    auto node = getNode (nodeId);
+    if (node.isValid())
+    {
+        node.setProperty (ids::posX, x, nullptr);
+        node.setProperty (ids::posY, y, nullptr);
+    }
+}
+
+juce::ValueTree GraphModel::findMacroNode (int macroIndex) const
+{
+    for (auto child : tree)
+        if (child.hasType (ids::node)
+            && nodeTypeFromString (child.getProperty (ids::type).toString()) == NodeType::macro
+            && (int) child.getProperty (ids::macroIndex, -1) == macroIndex)
+            return child;
+    return {};
+}
+
 bool GraphModel::addAudioConnection (int srcNodeId, int dstNodeId)
 {
     auto src = getNode (srcNodeId);

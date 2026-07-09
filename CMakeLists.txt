@@ -35,7 +35,9 @@ target_sources(Melomanix PRIVATE
     src/engine/GraphTypes.cpp
     src/engine/Nodes.cpp
     src/engine/GraphEngine.cpp
-    src/model/GraphModel.cpp)
+    src/model/GraphModel.cpp
+    src/ui/NodeComponent.cpp
+    src/ui/GraphCanvas.cpp)
 
 target_compile_definitions(Melomanix PUBLIC
     JUCE_WEB_BROWSER=0

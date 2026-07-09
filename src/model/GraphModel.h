@@ -32,6 +32,10 @@ public:
 
     juce::ValueTree getNode (int nodeId) const;
     NodeType getNodeType (const juce::ValueTree& node) const;
+    void setNodePosition (int nodeId, float x, float y);
+
+    // Existing macro node for a strip index, or invalid tree if none yet.
+    juce::ValueTree findMacroNode (int macroIndex) const;
 
     // Fresh default patch: audioIn -> audioOut.
     void resetToDefault();
