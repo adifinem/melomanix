@@ -65,6 +65,7 @@ const std::vector<ParamSpec>& paramSpecsFor (NodeType t)
 
     static const std::vector<ParamSpec> lfoSpecs {
         { "rate",  "Rate",  0.02f, 20.0f, 1.0f, 0.4f },
+        { "sync",  "Sync",  0.0f,   5.0f, 0.0f       },  // 0 free-Hz, then 1/1 1/2 1/4 1/8 1/16
         { "shape", "Shape", 0.0f,   3.0f, 0.0f       },  // 0 sine, 1 tri, 2 saw, 3 square
         { "depth", "Depth", 0.0f,   1.0f, 1.0f       },
     };

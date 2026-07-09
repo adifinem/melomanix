@@ -12,6 +12,7 @@ struct ProcessContext
     double sampleRate = 44100.0;
     int    maxBlockSize = 512;
     double playheadSeconds = 0.0;   // for time-synced controllers (LFO phase, timeline display)
+    double bpm = 120.0;             // host tempo, for tempo-synced LFO rates
     int    numSamples = 0;
 };
 
@@ -106,6 +107,10 @@ public:
     // Shape at a given phase [0,1), output [0,1] before depth — shared with
     // the timeline pane so display and audio always match.
     static float shapeValue (int shape, float phase);
+
+    // Effective cycles-per-second: the Hz knob when sync is off, otherwise
+    // derived from host tempo (sync 1..5 = 1/1, 1/2, 1/4, 1/8, 1/16 notes).
+    static double effectiveRate (float rateHz, int sync, double bpm);
 };
 
 class EQNode : public EngineNode

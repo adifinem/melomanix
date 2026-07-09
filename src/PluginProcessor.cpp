@@ -73,11 +73,15 @@ void MelomanixProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
     if (auto* playHead = getPlayHead())
         if (auto position = playHead->getPosition())
+        {
             if (auto time = position->getTimeInSeconds())
             {
                 seconds = *time;
                 haveHostTime = true;
             }
+            if (auto bpm = position->getBpm())
+                lastBpm.store (*bpm);
+        }
 
     if (! haveHostTime)
         internalClockSeconds += buffer.getNumSamples() / currentSampleRate;
@@ -89,6 +93,7 @@ void MelomanixProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     ctx.maxBlockSize = buffer.getNumSamples();
     ctx.numSamples = buffer.getNumSamples();
     ctx.playheadSeconds = seconds;
+    ctx.bpm = lastBpm.load();
 
     engine.process (buffer, ctx);
 }

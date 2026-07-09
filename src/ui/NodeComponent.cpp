@@ -70,8 +70,9 @@ NodeComponent::NodeComponent (GraphModel& m, juce::ValueTree nodeTree, Selection
 
         row->slider.setSliderStyle (juce::Slider::LinearHorizontal);
         row->slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-        // Stepped params (like LFO shape) snap to integers.
-        auto interval = juce::String (spec.id) == "shape" ? 1.0 : 0.0;
+        // Stepped params (LFO shape/sync) snap to integers.
+        auto stepped = juce::String (spec.id) == "shape" || juce::String (spec.id) == "sync";
+        auto interval = stepped ? 1.0 : 0.0;
         row->slider.setNormalisableRange ({ (double) spec.min, (double) spec.max,
                                             interval, (double) spec.skew });
         row->slider.setValue (model.getParamValue (nodeId, spec.id), juce::dontSendNotification);

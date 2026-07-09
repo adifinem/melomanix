@@ -15,11 +15,22 @@ float LFONode::shapeValue (int shape, float phase)
     }
 }
 
+double LFONode::effectiveRate (float rateHz, int sync, double bpm)
+{
+    if (sync <= 0)
+        return rateHz;
+
+    // sync index -> note length in beats (4/4): 1/1=4, 1/2=2, 1/4=1, 1/8=.5, 1/16=.25
+    auto beatsPerCycle = 4.0 / std::pow (2.0, sync - 1);
+    return (bpm / 60.0) / beatsPerCycle;
+}
+
 float LFONode::evaluate (const ProcessContext& ctx)
 {
-    auto rate  = params[0].current();
-    auto shape = (int) std::lround (params[1].current());
-    auto depth = params[2].current();
+    auto rate  = effectiveRate (params[0].current(),
+                                (int) std::lround (params[1].current()), ctx.bpm);
+    auto shape = (int) std::lround (params[2].current());
+    auto depth = params[3].current();
 
     // Phase derived from transport time, so LFOs stay deterministic against
     // the playhead (and the timeline pane can render the identical curve).

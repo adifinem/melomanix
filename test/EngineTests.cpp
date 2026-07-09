@@ -157,6 +157,14 @@ int main()
     expect (std::abs (rateAfter - rateBefore) > 0.01f,
             "macro -> lfo2 -> lfo1.rate chain changes effective rate");
 
+    // --- Tempo sync -------------------------------------------------------
+    expect (juce::approximatelyEqual (LFONode::effectiveRate (3.3f, 0, 120.0), (double) 3.3f),
+            "sync off passes the Hz knob through");
+    expect (juce::approximatelyEqual (LFONode::effectiveRate (3.3f, 3, 120.0), 2.0),
+            "1/4 note at 120bpm = 2Hz");
+    expect (juce::approximatelyEqual (LFONode::effectiveRate (3.3f, 1, 60.0), 0.25),
+            "1/1 note at 60bpm = 0.25Hz");
+
     // --- Serialisation round-trip ---------------------------------------
     auto xml = model.state().toXmlString();
     GraphModel restored;

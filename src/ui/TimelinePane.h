@@ -70,7 +70,9 @@ private:
     void paintLfoLane (juce::Graphics& g, juce::Rectangle<float> area, int nodeId)
     {
         auto& model = processor.graphModel;
-        auto rate  = model.getParamValue (nodeId, "rate");
+        auto rate  = LFONode::effectiveRate (model.getParamValue (nodeId, "rate"),
+                                             (int) std::lround (model.getParamValue (nodeId, "sync")),
+                                             processor.getBpm());
         auto shape = (int) std::lround (model.getParamValue (nodeId, "shape"));
         auto depth = model.getParamValue (nodeId, "depth");
 
