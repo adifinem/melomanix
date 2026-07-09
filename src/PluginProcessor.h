@@ -3,6 +3,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "model/GraphModel.h"
 #include "engine/GraphEngine.h"
+#include "engine/HostedPlugin.h"
 
 class MelomanixProcessor : public juce::AudioProcessor,
                            private juce::ValueTree::Listener,
@@ -38,6 +39,7 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
     melo::GraphModel graphModel;
+    melo::HostedPluginRegistry hostedPlugins;
 
     // Editor reads these to animate the timeline playhead and render
     // tempo-synced lanes identically to the engine.

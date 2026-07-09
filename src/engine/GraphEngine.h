@@ -2,6 +2,8 @@
 
 #include "Nodes.h"
 
+namespace juce { class AudioPluginInstance; }
+
 namespace melo
 {
 
@@ -45,7 +47,10 @@ private:
 
 // Builds a CompiledGraph from the model tree. `macroValues` supplies the
 // host-parameter storage that macro nodes read (indexed by macro number).
+// `hostedInstanceLookup` resolves a hosted node's plugin instance by node id
+// (nullable — hosted nodes then compile as silent passthroughs, e.g. in tests).
 std::shared_ptr<CompiledGraph> compileGraph (const juce::ValueTree& graphTree,
-                                             const std::vector<std::atomic<float>*>& macroValues);
+                                             const std::vector<std::atomic<float>*>& macroValues,
+                                             const std::function<juce::AudioPluginInstance* (int)>& hostedInstanceLookup = nullptr);
 
 } // namespace melo

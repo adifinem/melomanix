@@ -3,8 +3,10 @@
 namespace melo
 {
 
-GraphCanvas::GraphCanvas (GraphModel& m, SelectionModel& sel, std::function<double()> bpmProvider)
-    : model (m), selection (sel), getBpm (std::move (bpmProvider))
+GraphCanvas::GraphCanvas (GraphModel& m, SelectionModel& sel, std::function<double()> bpmProvider,
+                          std::function<void (int)> openHostedFn)
+    : model (m), selection (sel), getBpm (std::move (bpmProvider)),
+      openHostedEditorFn (std::move (openHostedFn))
 {
     observedTree = model.state();
     observedTree.addListener (this);
@@ -190,6 +192,8 @@ void GraphCanvas::showAddNodeMenu (juce::Point<int> canvasPos)
     menu.addItem (2, "Curve");
     menu.addItem (3, "EQ");
     menu.addItem (4, "Delay");
+    menu.addSeparator();
+    menu.addItem (5, "Load VST3 plugin...");
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
                         [this, contentPos] (int result)
@@ -198,7 +202,28 @@ void GraphCanvas::showAddNodeMenu (juce::Point<int> canvasPos)
                             if (result == 2) model.addNode (NodeType::curve, contentPos.x, contentPos.y);
                             if (result == 3) model.addNode (NodeType::eq,    contentPos.x, contentPos.y);
                             if (result == 4) model.addNode (NodeType::delay, contentPos.x, contentPos.y);
+                            if (result == 5) chooseAndLoadPlugin (contentPos);
                         });
+}
+
+void GraphCanvas::chooseAndLoadPlugin (juce::Point<float> contentPos)
+{
+    auto defaultDir = juce::File ("~/.vst3").exists() ? juce::File ("~/.vst3")
+                                                      : juce::File::getSpecialLocation (juce::File::userHomeDirectory);
+
+    pluginChooser = std::make_unique<juce::FileChooser> ("Load a VST3 plugin", defaultDir, "*.vst3");
+    pluginChooser->launchAsync (juce::FileBrowserComponent::openMode
+                                    | juce::FileBrowserComponent::canSelectFiles
+                                    | juce::FileBrowserComponent::canSelectDirectories,
+                                [this, contentPos] (const juce::FileChooser& chooser)
+                                {
+                                    auto file = chooser.getResult();
+                                    if (file == juce::File() || ! file.exists())
+                                        return;
+                                    model.addHostedNode (file.getFullPathName(),
+                                                         file.getFileNameWithoutExtension(),
+                                                         contentPos.x, contentPos.y);
+                                });
 }
 
 // --- cable gesture ----------------------------------------------------------

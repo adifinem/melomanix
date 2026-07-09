@@ -13,7 +13,11 @@ class GraphCanvas : public juce::Component,
                     private juce::Timer
 {
 public:
-    GraphCanvas (GraphModel&, SelectionModel&, std::function<double()> bpmProvider);
+    GraphCanvas (GraphModel&, SelectionModel&, std::function<double()> bpmProvider,
+                 std::function<void (int)> openHostedEditorFn);
+
+    // Double-clicking a hosted node's header opens its plugin GUI.
+    void openHostedEditor (int nodeId) { if (openHostedEditorFn != nullptr) openHostedEditorFn (nodeId); }
     ~GraphCanvas() override;
 
     void resized() override;
@@ -41,6 +45,7 @@ private:
 
     void rebuild();
     void showAddNodeMenu (juce::Point<int> canvasPos);
+    void chooseAndLoadPlugin (juce::Point<float> contentPos);
     NodeComponent* findNodeComponent (int nodeId) const;
     juce::Point<float> contentPosFor (const juce::ValueTree& node) const;
     void applyViewTransform();
@@ -52,6 +57,8 @@ private:
     GraphModel& model;
     SelectionModel& selection;
     std::function<double()> getBpm;
+    std::function<void (int)> openHostedEditorFn;
+    std::unique_ptr<juce::FileChooser> pluginChooser;
     juce::ValueTree observedTree;
 
     std::vector<std::unique_ptr<NodeComponent>> nodeComps;

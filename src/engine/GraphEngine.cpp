@@ -1,4 +1,5 @@
 #include "GraphEngine.h"
+#include "HostedPlugin.h"
 #include <map>
 
 namespace melo
@@ -88,7 +89,8 @@ void GraphEngine::process (juce::AudioBuffer<float>& buffer, ProcessContext& ctx
 }
 
 std::shared_ptr<CompiledGraph> compileGraph (const juce::ValueTree& graphTree,
-                                             const std::vector<std::atomic<float>*>& macroValues)
+                                             const std::vector<std::atomic<float>*>& macroValues,
+                                             const std::function<juce::AudioPluginInstance* (int)>& hostedInstanceLookup)
 {
     auto compiled = std::make_shared<CompiledGraph>();
     std::map<int, int> modelIdToIndex;
@@ -119,6 +121,13 @@ std::shared_ptr<CompiledGraph> compileGraph (const juce::ValueTree& graphTree,
                 std::sort (curve->points.begin(), curve->points.end(),
                            [] (auto& a, auto& b) { return a.t < b.t; });
                 node = std::move (curve);
+                break;
+            }
+            case NodeType::hosted:
+            {
+                int hostedNodeId = child.getProperty (ids::nodeId);
+                node = std::make_unique<HostedNode> (
+                    hostedInstanceLookup != nullptr ? hostedInstanceLookup (hostedNodeId) : nullptr);
                 break;
             }
             case NodeType::macro:

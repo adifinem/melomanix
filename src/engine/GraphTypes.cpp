@@ -14,6 +14,7 @@ juce::String nodeTypeToString (NodeType t)
         case NodeType::lfo:      return "lfo";
         case NodeType::macro:    return "macro";
         case NodeType::curve:    return "curve";
+        case NodeType::hosted:   return "hosted";
     }
     jassertfalse;
     return "audioIn";
@@ -27,6 +28,7 @@ NodeType nodeTypeFromString (const juce::String& s)
     if (s == "lfo")      return NodeType::lfo;
     if (s == "macro")    return NodeType::macro;
     if (s == "curve")    return NodeType::curve;
+    if (s == "hosted")   return NodeType::hosted;
     return NodeType::audioIn;
 }
 
@@ -37,7 +39,8 @@ NodeKind kindOf (NodeType t)
         case NodeType::audioIn:
         case NodeType::audioOut: return NodeKind::io;
         case NodeType::eq:
-        case NodeType::delay:    return NodeKind::dsp;
+        case NodeType::delay:
+        case NodeType::hosted:   return NodeKind::dsp;
         case NodeType::lfo:
         case NodeType::macro:
         case NodeType::curve:    return NodeKind::controller;
@@ -87,7 +90,8 @@ const std::vector<ParamSpec>& paramSpecsFor (NodeType t)
         case NodeType::curve:    return curveSpecs;
         case NodeType::audioIn:
         case NodeType::audioOut:
-        case NodeType::macro:    return none;
+        case NodeType::macro:
+        case NodeType::hosted:   return none;   // hosted params exposed dynamically (v0.3b)
     }
     return none;
 }

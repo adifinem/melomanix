@@ -76,6 +76,15 @@ int GraphModel::addMacroNode (int macroIndex, float x, float y)
     return id;
 }
 
+int GraphModel::addHostedNode (const juce::String& pluginPath, const juce::String& pluginName, float x, float y)
+{
+    auto id = addNode (NodeType::hosted, x, y);
+    auto node = getNode (id);
+    node.setProperty (ids::pluginPath, pluginPath, nullptr);
+    node.setProperty (ids::pluginName, pluginName, nullptr);
+    return id;
+}
+
 void GraphModel::removeNode (int nodeId)
 {
     for (int i = tree.getNumChildren(); --i >= 0;)

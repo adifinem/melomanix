@@ -41,12 +41,18 @@ void MelomanixProcessor::attachToModel()
 
 void MelomanixProcessor::rebuildGraph()
 {
-    engine.setGraph (melo::compileGraph (graphModel.state(), macroValues));
+    auto errors = hostedPlugins.syncWithModel (graphModel.state());
+    for (auto& error : errors)
+        juce::Logger::writeToLog ("Melomanix hosted plugin: " + error);
+
+    engine.setGraph (melo::compileGraph (graphModel.state(), macroValues,
+        [this] (int nodeId) { return hostedPlugins.instanceFor (nodeId); }));
 }
 
 void MelomanixProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     currentSampleRate = sampleRate;
+    hostedPlugins.prepare (sampleRate, samplesPerBlock);
     engine.prepare (sampleRate, samplesPerBlock);
 }
 
@@ -106,6 +112,8 @@ void MelomanixProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
 void MelomanixProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
+    hostedPlugins.captureStates (graphModel.state());
+
     juce::ValueTree root ("MELOMANIX");
     root.addChild (apvts.copyState(), -1, nullptr);
     root.addChild (graphModel.state().createCopy(), -1, nullptr);
@@ -130,7 +138,10 @@ void MelomanixProcessor::setStateInformation (const void* data, int sizeInBytes)
     graphModel.state().removeListener (this);
     graphModel.replaceState (root.getChildWithName (melo::ids::graph).createCopy());
     attachToModel();
-    rebuildGraph();
+
+    // Instantiating hosted plugins must happen on the message thread; some
+    // hosts call setStateInformation from a background thread.
+    triggerAsyncUpdate();
 }
 
 juce::AudioProcessorEditor* MelomanixProcessor::createEditor()

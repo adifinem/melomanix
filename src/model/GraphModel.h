@@ -19,6 +19,8 @@ public:
     int  addNode (NodeType type, float x, float y);
     // Macro nodes carry the index of the host macro parameter they mirror.
     int  addMacroNode (int macroIndex, float x, float y);
+    // Hosted nodes carry the plugin file they load.
+    int  addHostedNode (const juce::String& pluginPath, const juce::String& pluginName, float x, float y);
     void removeNode (int nodeId);
 
     // Audio edge (src's audio out -> dst's audio in). Returns false if rejected.

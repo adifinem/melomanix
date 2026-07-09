@@ -131,8 +131,18 @@ void NodeComponent::paint (juce::Graphics& g)
 
     g.setColour (theme::text);
     g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-    g.drawText (theme::titleFor (type, (int) tree.getProperty (ids::macroIndex, -1)),
-                header.reduced (18.0f, 0.0f), juce::Justification::centred);
+    auto title = type == NodeType::hosted
+                     ? tree.getProperty (ids::pluginName, "Plugin").toString()
+                     : theme::titleFor (type, (int) tree.getProperty (ids::macroIndex, -1));
+    g.drawText (title, header.reduced (18.0f, 0.0f), juce::Justification::centred);
+
+    if (type == NodeType::hosted)
+    {
+        g.setColour (theme::textDim);
+        g.setFont (juce::FontOptions (10.0f));
+        g.drawText ("double-click to open", getLocalBounds().withTrimmedTop (headerHeight),
+                    juce::Justification::centred);
+    }
 
     if (highlightedRow >= 0)
     {
@@ -187,6 +197,13 @@ void NodeComponent::mouseUp (const juce::MouseEvent&)
 {
     if (auto* canvas = findParentComponentOfClass<GraphCanvas>())
         canvas->nodeDragFinished (*this);
+}
+
+void NodeComponent::mouseDoubleClick (const juce::MouseEvent&)
+{
+    if (type == NodeType::hosted)
+        if (auto* canvas = findParentComponentOfClass<GraphCanvas>())
+            canvas->openHostedEditor (nodeId);
 }
 
 void NodeComponent::showContextMenu()

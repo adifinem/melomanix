@@ -35,6 +35,7 @@ target_sources(Melomanix PRIVATE
     src/engine/GraphTypes.cpp
     src/engine/Nodes.cpp
     src/engine/GraphEngine.cpp
+    src/engine/HostedPlugin.cpp
     src/model/GraphModel.cpp
     src/ui/NodeComponent.cpp
     src/ui/GraphCanvas.cpp)
@@ -42,7 +43,8 @@ target_sources(Melomanix PRIVATE
 target_compile_definitions(Melomanix PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
-    JUCE_VST3_CAN_REPLACE_VST2=0)
+    JUCE_VST3_CAN_REPLACE_VST2=0
+    JUCE_PLUGINHOST_VST3=1)
 
 target_link_libraries(Melomanix
     PRIVATE
@@ -60,12 +62,19 @@ target_sources(MelomanixTests PRIVATE
     src/engine/GraphTypes.cpp
     src/engine/Nodes.cpp
     src/engine/GraphEngine.cpp
+    src/engine/HostedPlugin.cpp
     src/model/GraphModel.cpp)
+
+target_compile_definitions(MelomanixTests PRIVATE
+    JUCE_PLUGINHOST_VST3=1
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0)
 
 target_link_libraries(MelomanixTests
     PRIVATE
         juce::juce_data_structures
         juce::juce_dsp
+        juce::juce_audio_processors
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)

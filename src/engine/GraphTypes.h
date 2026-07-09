@@ -14,7 +14,8 @@ enum class NodeType
     delay,
     lfo,
     macro,
-    curve
+    curve,
+    hosted   // a third-party plugin loaded as a DSP node
 };
 
 // Controllers emit a block-rate control value in [0, 1]; DSP nodes process audio.
@@ -81,6 +82,11 @@ namespace ids
     inline const juce::Identifier pointT    { "t" };
     inline const juce::Identifier pointV    { "v" };
     inline const juce::Identifier tension   { "tension" };
+
+    // Hosted third-party plugin nodes.
+    inline const juce::Identifier pluginPath  { "pluginPath" };
+    inline const juce::Identifier pluginName  { "pluginName" };
+    inline const juce::Identifier pluginState { "pluginState" };   // base64
 }
 
 } // namespace melo

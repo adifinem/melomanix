@@ -45,6 +45,7 @@ public:
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
+    void mouseDoubleClick (const juce::MouseEvent&) override;
 
     // Drop target for macro-strip drag-to-assign.
     bool isInterestedInDragSource (const SourceDetails&) override;

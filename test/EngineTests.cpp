@@ -3,6 +3,7 @@
 
 #include "../src/model/GraphModel.h"
 #include "../src/engine/GraphEngine.h"
+#include "../src/engine/HostedPlugin.h"
 
 #include <iostream>
 
@@ -207,6 +208,63 @@ int main()
     auto reference = compileGraph (model.state(), macroValues);
     expect (recompiled != nullptr && recompiled->nodes.size() == reference->nodes.size(),
             "graph survives XML round-trip");
+
+    // --- Hosted plugin (optional: needs MELOMANIX_TEST_VST3=<path>) --------
+    if (auto vst3Path = juce::SystemStats::getEnvironmentVariable ("MELOMANIX_TEST_VST3", {});
+        vst3Path.isNotEmpty())
+    {
+        juce::ScopedJuceInitialiser_GUI juceInit;   // hosting needs a message manager
+
+        GraphModel hostModel;
+        auto hIn  = [&hostModel] { for (auto c : hostModel.state())
+                                       if (c.hasType (ids::node) && c.getProperty (ids::type).toString() == "audioIn")
+                                           return (int) c.getProperty (ids::nodeId);
+                                   return -1; }();
+        auto hOut = [&hostModel] { for (auto c : hostModel.state())
+                                       if (c.hasType (ids::node) && c.getProperty (ids::type).toString() == "audioOut")
+                                           return (int) c.getProperty (ids::nodeId);
+                                   return -1; }();
+
+        auto hostedId = hostModel.addHostedNode (vst3Path, "TestPlugin", 0.0f, 0.0f);
+
+        for (int i = hostModel.state().getNumChildren(); --i >= 0;)
+            if (hostModel.state().getChild (i).hasType (ids::conn))
+                hostModel.state().removeChild (i, nullptr);
+        expect (hostModel.addAudioConnection (hIn, hostedId), "audio connects into hosted node");
+        expect (hostModel.addAudioConnection (hostedId, hOut), "hosted node connects to output");
+
+        HostedPluginRegistry registry;
+        registry.prepare (48000.0, 256);
+        auto loadErrors = registry.syncWithModel (hostModel.state());
+        expect (loadErrors.isEmpty(), ("hosted plugin loads: " + loadErrors.joinIntoString ("; ")).toRawUTF8());
+        expect (registry.instanceFor (hostedId) != nullptr, "registry holds the instance");
+
+        auto hostedGraph = compileGraph (hostModel.state(), macroValues,
+                                         [&registry] (int id) { return registry.instanceFor (id); });
+        GraphEngine hostedEngine;
+        hostedEngine.prepare (48000.0, 256);
+        hostedEngine.setGraph (hostedGraph);
+
+        juce::AudioBuffer<float> hostBuffer (2, 256);
+        hostBuffer.clear();
+        ProcessContext hostCtx;
+        hostCtx.sampleRate = 48000.0;
+        hostCtx.maxBlockSize = 256;
+        hostCtx.numSamples = 256;
+        for (int block = 0; block < 8; ++block)
+            hostedEngine.process (hostBuffer, hostCtx);
+        expect (true, "audio processes through hosted plugin without crashing");
+
+        // State capture round-trip.
+        auto graphRef = hostModel.state();
+        registry.captureStates (graphRef);
+        expect (hostModel.getNode (hostedId).getProperty (ids::pluginState).toString().isNotEmpty(),
+                "hosted plugin state captured into the tree");
+    }
+    else
+    {
+        std::cout << "(hosted plugin test skipped: set MELOMANIX_TEST_VST3=<path.vst3>)\n";
+    }
 
     std::cout << (failures == 0 ? "\nALL ENGINE TESTS PASSED\n"
                                 : "\nENGINE TESTS FAILED\n");
