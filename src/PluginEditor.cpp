@@ -5,7 +5,8 @@ MelomanixEditor::MelomanixEditor (MelomanixProcessor& p)
       processor (p),
       macroStrip (p),
       graphCanvas (p.graphModel, selection, [&p] { return p.getBpm(); },
-                   [&p] (int nodeId) { p.hostedPlugins.showEditorWindow (nodeId); }),
+                   [&p] (int nodeId) { p.hostedPlugins.showEditorWindow (nodeId); },
+                   [&p] (int nodeId) { return p.hostedPlugins.instanceFor (nodeId); }),
       timelinePane (p, selection)
 {
     addAndMakeVisible (macroStrip);

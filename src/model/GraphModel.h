@@ -21,6 +21,11 @@ public:
     int  addMacroNode (int macroIndex, float x, float y);
     // Hosted nodes carry the plugin file they load.
     int  addHostedNode (const juce::String& pluginPath, const juce::String& pluginName, float x, float y);
+
+    // Toggle a hosted parameter's exposure as a modulation socket. Removing
+    // also drops any mod connection targeting it.
+    void setHostedParamExposed (int nodeId, int paramIndex, const juce::String& name, bool exposed);
+    bool isHostedParamExposed (int nodeId, int paramIndex) const;
     void removeNode (int nodeId);
 
     // Audio edge (src's audio out -> dst's audio in). Returns false if rejected.

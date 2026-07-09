@@ -1,5 +1,6 @@
 #include "NodeComponent.h"
 #include "GraphCanvas.h"
+#include <juce_audio_processors/juce_audio_processors.h>
 
 namespace melo
 {
@@ -48,57 +49,21 @@ void Socket::mouseUp (const juce::MouseEvent& e)
 // --- NodeComponent ------------------------------------------------------
 
 NodeComponent::NodeComponent (GraphModel& m, juce::ValueTree nodeTree, SelectionModel& sel,
-                              std::function<double()> bpmProvider)
+                              std::function<double()> bpmProvider, HostedInstanceLookup hostedLookup)
     : model (m),
       tree (nodeTree),
       selection (sel),
       getBpm (std::move (bpmProvider)),
+      hostedInstance (std::move (hostedLookup)),
       nodeId (nodeTree.getProperty (ids::nodeId)),
       type (nodeTypeFromString (nodeTree.getProperty (ids::type).toString()))
 {
     tree.addListener (this);
 
-    auto& specs = paramSpecsFor (type);
-    for (auto& spec : specs)
-    {
-        auto row = std::make_unique<ParamRow>();
-        row->spec = spec;
-
-        row->label.setText (spec.name, juce::dontSendNotification);
-        row->label.setFont (juce::FontOptions (11.0f));
-        row->label.setColour (juce::Label::textColourId, theme::textDim);
-        row->label.setInterceptsMouseClicks (false, false);
-        addAndMakeVisible (row->label);
-
-        row->slider.setSliderStyle (juce::Slider::LinearHorizontal);
-        row->slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-        // Stepped params (LFO shape/sync) snap to integers.
-        auto stepped = juce::String (spec.id) == "shape" || juce::String (spec.id) == "sync";
-        auto interval = stepped ? 1.0 : 0.0;
-        row->slider.setNormalisableRange ({ (double) spec.min, (double) spec.max,
-                                            interval, (double) spec.skew });
-        row->slider.setValue (model.getParamValue (nodeId, spec.id), juce::dontSendNotification);
-        row->slider.setColour (juce::Slider::trackColourId, theme::controlSignal.withAlpha (0.4f));
-
-        // Value bubble with real units (and note values at the host tempo)
-        // on hover and while dragging.
-        row->slider.textFromValueFunction = [spec, this] (double v)
-        {
-            return formatParamValue (spec, (float) v, getBpm != nullptr ? getBpm() : 0.0);
-        };
-        row->slider.setPopupDisplayEnabled (true, true, nullptr);
-        row->slider.onValueChange = [this, id = juce::String (spec.id), s = &row->slider]
-        {
-            if (! updatingFromTree)
-                model.setParamValue (nodeId, id, (float) s->getValue());
-        };
-        addAndMakeVisible (row->slider);
-
-        row->socket = std::make_unique<Socket> (SocketKind::paramIn, nodeId, spec.id);
-        addAndMakeVisible (*row->socket);
-
-        rows.push_back (std::move (row));
-    }
+    if (type == NodeType::hosted)
+        buildHostedRows();
+    else
+        buildStaticRows();
 
     if (type != NodeType::audioIn && kindOf (type) != NodeKind::controller)
         addAndMakeVisible (*(audioInSocket = std::make_unique<Socket> (SocketKind::audioIn, nodeId)));
@@ -113,6 +78,92 @@ NodeComponent::NodeComponent (GraphModel& m, juce::ValueTree nodeTree, Selection
 NodeComponent::~NodeComponent()
 {
     tree.removeListener (this);
+}
+
+void NodeComponent::addRow (std::unique_ptr<ParamRow> row)
+{
+    row->label.setFont (juce::FontOptions (11.0f));
+    row->label.setColour (juce::Label::textColourId, theme::textDim);
+    row->label.setInterceptsMouseClicks (false, false);
+    addAndMakeVisible (row->label);
+
+    row->slider.setSliderStyle (juce::Slider::LinearHorizontal);
+    row->slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    row->slider.setColour (juce::Slider::trackColourId, theme::controlSignal.withAlpha (0.4f));
+    row->slider.setPopupDisplayEnabled (true, true, nullptr);
+    addAndMakeVisible (row->slider);
+
+    row->socket = std::make_unique<Socket> (SocketKind::paramIn, nodeId, juce::String (row->spec.id));
+    addAndMakeVisible (*row->socket);
+
+    rows.push_back (std::move (row));
+}
+
+void NodeComponent::buildStaticRows()
+{
+    for (auto& spec : paramSpecsFor (type))
+    {
+        auto row = std::make_unique<ParamRow>();
+        row->spec = spec;
+        row->label.setText (spec.name, juce::dontSendNotification);
+
+        // Stepped params (LFO shape/sync) snap to integers.
+        auto stepped = juce::String (spec.id) == "shape" || juce::String (spec.id) == "sync";
+        row->slider.setNormalisableRange ({ (double) spec.min, (double) spec.max,
+                                            stepped ? 1.0 : 0.0, (double) spec.skew });
+        row->slider.setValue (model.getParamValue (nodeId, spec.id), juce::dontSendNotification);
+
+        // Value bubble with real units (and note values at the host tempo).
+        row->slider.textFromValueFunction = [spec, this] (double v)
+        {
+            return formatParamValue (spec, (float) v, getBpm != nullptr ? getBpm() : 0.0);
+        };
+        row->slider.onValueChange = [this, id = juce::String (spec.id), s = &row->slider]
+        {
+            if (! updatingFromTree)
+                model.setParamValue (nodeId, id, (float) s->getValue());
+        };
+
+        addRow (std::move (row));
+    }
+}
+
+void NodeComponent::buildHostedRows()
+{
+    auto* instance = hostedInstance != nullptr ? hostedInstance (nodeId) : nullptr;
+
+    for (auto child : tree)
+    {
+        if (! child.hasType (ids::exposed))
+            continue;
+
+        auto index = (int) child.getProperty (ids::hostParam);
+        auto row = std::make_unique<ParamRow>();
+        row->hostParamIndex = index;
+        row->idStorage = ("p" + juce::String (index)).toStdString();
+        row->spec = ParamSpec { row->idStorage.c_str(), "", 0.0f, 1.0f, 0.5f };
+        row->label.setText (child.getProperty (ids::paramName).toString(), juce::dontSendNotification);
+
+        juce::AudioProcessorParameter* hostedParam =
+            instance != nullptr && juce::isPositiveAndBelow (index, instance->getParameters().size())
+                ? instance->getParameters()[index] : nullptr;
+
+        row->slider.setRange (0.0, 1.0);
+        if (hostedParam != nullptr)
+        {
+            row->slider.setValue (hostedParam->getValue(), juce::dontSendNotification);
+            row->slider.textFromValueFunction = [hostedParam] (double v)
+            {
+                return hostedParam->getText ((float) v, 24);
+            };
+            row->slider.onValueChange = [hostedParam, s = &row->slider]
+            {
+                hostedParam->setValue ((float) s->getValue());
+            };
+        }
+
+        addRow (std::move (row));
+    }
 }
 
 void NodeComponent::paint (juce::Graphics& g)
@@ -136,11 +187,12 @@ void NodeComponent::paint (juce::Graphics& g)
                      : theme::titleFor (type, (int) tree.getProperty (ids::macroIndex, -1));
     g.drawText (title, header.reduced (18.0f, 0.0f), juce::Justification::centred);
 
-    if (type == NodeType::hosted)
+    if (type == NodeType::hosted && rows.empty())
     {
         g.setColour (theme::textDim);
         g.setFont (juce::FontOptions (10.0f));
-        g.drawText ("double-click to open", getLocalBounds().withTrimmedTop (headerHeight),
+        g.drawText ("double-click: GUI · right-click: params",
+                    getLocalBounds().withTrimmedTop (headerHeight),
                     juce::Justification::centred);
     }
 
@@ -214,13 +266,38 @@ void NodeComponent::showContextMenu()
 
     juce::PopupMenu menu;
     menu.addItem (1, "Delete node");
+
+    // Hosted nodes: expose plugin parameters as modulation sockets.
+    juce::AudioPluginInstance* instance = nullptr;
+    if (type == NodeType::hosted && hostedInstance != nullptr)
+        instance = hostedInstance (nodeId);
+
+    if (instance != nullptr)
+    {
+        juce::PopupMenu paramsMenu;
+        auto& parameters = instance->getParameters();
+        auto count = juce::jmin (parameters.size(), 200);
+        for (int i = 0; i < count; ++i)
+            paramsMenu.addItem (100 + i, parameters[i]->getName (40), true,
+                                model.isHostedParamExposed (nodeId, i));
+        menu.addSubMenu ("Expose parameter", paramsMenu);
+    }
+
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
-                        [this] (int result)
+                        [this, instance] (int result)
                         {
                             if (result == 1)
                             {
                                 selection.clearIfSelected (nodeId);
                                 model.removeNode (nodeId);
+                            }
+                            else if (result >= 100 && instance != nullptr)
+                            {
+                                auto index = result - 100;
+                                model.setHostedParamExposed (
+                                    nodeId, index,
+                                    instance->getParameters()[index]->getName (40),
+                                    ! model.isHostedParamExposed (nodeId, index));
                             }
                         });
 }

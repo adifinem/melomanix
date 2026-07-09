@@ -52,23 +52,52 @@ private:
 // pointer is valid for the compiled graph's lifetime because the registry
 // only frees instances after the model (and thus any compiled graph
 // referencing the node) has dropped them.
+//
+// Exposed plugin parameters become ParamState slots (id "p<index>", 0..1
+// normalised — the VST3 parameter domain). A slot only writes to the plugin
+// while a modulation source is connected, so unmodulated params stay under
+// the plugin GUI's control.
 class HostedNode : public EngineNode
 {
 public:
-    explicit HostedNode (juce::AudioPluginInstance* hosted)
-        : EngineNode (NodeType::hosted), instance (hosted) {}
+    HostedNode (juce::AudioPluginInstance* hosted, const std::vector<int>& exposedIndices)
+        : EngineNode (NodeType::hosted), instance (hosted)
+    {
+        paramIds.reserve (exposedIndices.size());
+
+        for (auto index : exposedIndices)
+        {
+            juce::AudioProcessorParameter* hostedParam = nullptr;
+            if (instance != nullptr && juce::isPositiveAndBelow (index, instance->getParameters().size()))
+                hostedParam = instance->getParameters()[index];
+
+            paramIds.push_back ("p" + std::to_string (index));
+
+            ParamState slot;
+            slot.spec = ParamSpec { paramIds.back().c_str(), "", 0.0f, 1.0f, 0.5f };
+            slot.baseNorm = hostedParam != nullptr ? hostedParam->getValue() : 0.5f;
+            params.push_back (slot);
+            hostedParams.push_back (hostedParam);
+        }
+    }
 
     void process (juce::AudioBuffer<float>& buffer, const ProcessContext&) override
     {
-        if (instance != nullptr)
-        {
-            midiScratch.clear();
-            instance->processBlock (buffer, midiScratch);
-        }
+        if (instance == nullptr)
+            return;
+
+        for (size_t i = 0; i < params.size(); ++i)
+            if (params[i].modSourceIndex >= 0 && hostedParams[i] != nullptr)
+                hostedParams[i]->setValue (params[i].current());
+
+        midiScratch.clear();
+        instance->processBlock (buffer, midiScratch);
     }
 
 private:
     juce::AudioPluginInstance* instance;
+    std::vector<std::string> paramIds;   // stable storage backing ParamSpec::id
+    std::vector<juce::AudioProcessorParameter*> hostedParams;
     juce::MidiBuffer midiScratch;
 };
 

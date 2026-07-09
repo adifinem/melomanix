@@ -4,10 +4,13 @@
 #include "Selection.h"
 #include "Theme.h"
 
+namespace juce { class AudioPluginInstance; }
+
 namespace melo
 {
 
 class GraphCanvas;
+using HostedInstanceLookup = std::function<juce::AudioPluginInstance* (int)>;
 
 enum class SocketKind { audioIn, audioOut, ctrlOut, paramIn };
 
@@ -37,7 +40,7 @@ class NodeComponent : public juce::Component,
 {
 public:
     NodeComponent (GraphModel&, juce::ValueTree nodeTree, SelectionModel&,
-                   std::function<double()> bpmProvider);
+                   std::function<double()> bpmProvider, HostedInstanceLookup hostedLookup);
     ~NodeComponent() override;
 
     void paint (juce::Graphics&) override;
@@ -71,6 +74,7 @@ private:
     juce::ValueTree tree;
     SelectionModel& selection;
     std::function<double()> getBpm;
+    HostedInstanceLookup hostedInstance;
 
     const int nodeId;
     const NodeType type;
@@ -81,7 +85,13 @@ private:
         juce::Slider slider;
         std::unique_ptr<Socket> socket;
         ParamSpec spec { "", "", 0.0f, 1.0f, 0.0f };
+        std::string idStorage;   // backs spec.id for dynamically-built (hosted) rows
+        int hostParamIndex = -1;
     };
+
+    void buildStaticRows();
+    void buildHostedRows();
+    void addRow (std::unique_ptr<ParamRow>);
 
     std::vector<std::unique_ptr<ParamRow>> rows;
     std::unique_ptr<Socket> audioInSocket, audioOutSocket, ctrlOutSocket;

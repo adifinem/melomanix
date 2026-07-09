@@ -260,6 +260,44 @@ int main()
         registry.captureStates (graphRef);
         expect (hostModel.getNode (hostedId).getProperty (ids::pluginState).toString().isNotEmpty(),
                 "hosted plugin state captured into the tree");
+
+        // Exposed-parameter modulation: LFO -> hosted param 0.
+        auto* inst = registry.instanceFor (hostedId);
+        if (inst != nullptr && ! inst->getParameters().isEmpty())
+        {
+            expect (! hostModel.addModConnection (
+                        hostModel.addNode (NodeType::lfo, 0.0f, 0.0f), hostedId, "p0"),
+                    "mod into unexposed hosted param rejected");
+
+            hostModel.setHostedParamExposed (hostedId, 0,
+                                             inst->getParameters()[0]->getName (40), true);
+            auto modLfo = hostModel.addNode (NodeType::lfo, 0.0f, 100.0f);
+            hostModel.setParamValue (modLfo, "rate", 5.0f);
+            expect (hostModel.addModConnection (modLfo, hostedId, "p0"),
+                    "mod into exposed hosted param accepted");
+
+            auto modGraph = compileGraph (hostModel.state(), macroValues,
+                                          [&registry] (int id) { return registry.instanceFor (id); });
+            hostedEngine.setGraph (modGraph);
+
+            auto before = inst->getParameters()[0]->getValue();
+            float minSeen = 1.0f, maxSeen = 0.0f;
+            double beats = 0.0;
+            for (int block = 0; block < 60; ++block)
+            {
+                hostCtx.playheadSeconds = beats / 2.0;
+                hostCtx.playheadBeats = beats;
+                hostedEngine.process (hostBuffer, hostCtx);
+                auto v = inst->getParameters()[0]->getValue();
+                minSeen = std::min (minSeen, v);
+                maxSeen = std::max (maxSeen, v);
+                beats += 256.0 / 48000.0 * 2.0;
+                hostBuffer.clear();
+            }
+            juce::ignoreUnused (before);
+            expect (maxSeen - minSeen > 0.2f,
+                    "LFO visibly sweeps the hosted plugin's parameter");
+        }
     }
     else
     {

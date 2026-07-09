@@ -126,8 +126,13 @@ std::shared_ptr<CompiledGraph> compileGraph (const juce::ValueTree& graphTree,
             case NodeType::hosted:
             {
                 int hostedNodeId = child.getProperty (ids::nodeId);
+                std::vector<int> exposedIndices;
+                for (auto exposedTree : child)
+                    if (exposedTree.hasType (ids::exposed))
+                        exposedIndices.push_back (exposedTree.getProperty (ids::hostParam));
                 node = std::make_unique<HostedNode> (
-                    hostedInstanceLookup != nullptr ? hostedInstanceLookup (hostedNodeId) : nullptr);
+                    hostedInstanceLookup != nullptr ? hostedInstanceLookup (hostedNodeId) : nullptr,
+                    exposedIndices);
                 break;
             }
             case NodeType::macro:

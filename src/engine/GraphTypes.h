@@ -87,6 +87,12 @@ namespace ids
     inline const juce::Identifier pluginPath  { "pluginPath" };
     inline const juce::Identifier pluginName  { "pluginName" };
     inline const juce::Identifier pluginState { "pluginState" };   // base64
+
+    // A hosted parameter exposed as a modulation socket. Children of the
+    // hosted NODE; the socket's paramId is "p<index>".
+    inline const juce::Identifier exposed   { "EXPOSED" };
+    inline const juce::Identifier hostParam { "hostParam" };   // parameter index in the plugin
+    inline const juce::Identifier paramName { "paramName" };
 }
 
 } // namespace melo

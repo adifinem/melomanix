@@ -85,6 +85,51 @@ int GraphModel::addHostedNode (const juce::String& pluginPath, const juce::Strin
     return id;
 }
 
+void GraphModel::setHostedParamExposed (int nodeId, int paramIndex, const juce::String& name, bool shouldExpose)
+{
+    auto node = getNode (nodeId);
+    if (! node.isValid())
+        return;
+
+    for (int i = node.getNumChildren(); --i >= 0;)
+    {
+        auto child = node.getChild (i);
+        if (child.hasType (ids::exposed) && (int) child.getProperty (ids::hostParam) == paramIndex)
+        {
+            if (shouldExpose)
+                return;   // already exposed
+
+            node.removeChild (i, nullptr);
+            auto paramId = "p" + juce::String (paramIndex);
+            for (int c = tree.getNumChildren(); --c >= 0;)
+            {
+                auto conn = tree.getChild (c);
+                if (conn.hasType (ids::conn) && (int) conn.getProperty (ids::dstNode) == nodeId
+                    && conn.getProperty (ids::dstParam).toString() == paramId)
+                    tree.removeChild (c, nullptr);
+            }
+            return;
+        }
+    }
+
+    if (shouldExpose)
+    {
+        juce::ValueTree exposedTree (ids::exposed);
+        exposedTree.setProperty (ids::hostParam, paramIndex, nullptr);
+        exposedTree.setProperty (ids::paramName, name, nullptr);
+        node.addChild (exposedTree, -1, nullptr);
+    }
+}
+
+bool GraphModel::isHostedParamExposed (int nodeId, int paramIndex) const
+{
+    auto node = getNode (nodeId);
+    for (auto child : node)
+        if (child.hasType (ids::exposed) && (int) child.getProperty (ids::hostParam) == paramIndex)
+            return true;
+    return false;
+}
+
 void GraphModel::removeNode (int nodeId)
 {
     for (int i = tree.getNumChildren(); --i >= 0;)
@@ -169,11 +214,22 @@ bool GraphModel::addModConnection (int srcNodeId, int dstNodeId, const juce::Str
     if (kindOf (getNodeType (src)) != NodeKind::controller)
         return false;
 
-    // The target param must exist on the destination node.
+    // The target param must exist on the destination node. Hosted nodes
+    // validate against their exposed parameters instead of static specs.
     bool paramExists = false;
-    for (auto& spec : paramSpecsFor (getNodeType (dst)))
-        if (paramId == spec.id)
-            paramExists = true;
+    if (getNodeType (dst) == NodeType::hosted)
+    {
+        for (auto child : dst)
+            if (child.hasType (ids::exposed)
+                && "p" + child.getProperty (ids::hostParam).toString() == paramId)
+                paramExists = true;
+    }
+    else
+    {
+        for (auto& spec : paramSpecsFor (getNodeType (dst)))
+            if (paramId == spec.id)
+                paramExists = true;
+    }
     if (! paramExists)
         return false;
 

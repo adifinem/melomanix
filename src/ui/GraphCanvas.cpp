@@ -4,9 +4,10 @@ namespace melo
 {
 
 GraphCanvas::GraphCanvas (GraphModel& m, SelectionModel& sel, std::function<double()> bpmProvider,
-                          std::function<void (int)> openHostedFn)
+                          std::function<void (int)> openHostedFn, HostedInstanceLookup hostedLookupFn)
     : model (m), selection (sel), getBpm (std::move (bpmProvider)),
-      openHostedEditorFn (std::move (openHostedFn))
+      openHostedEditorFn (std::move (openHostedFn)),
+      hostedLookup (std::move (hostedLookupFn))
 {
     observedTree = model.state();
     observedTree.addListener (this);
@@ -62,7 +63,7 @@ void GraphCanvas::rebuild()
         if (! child.hasType (ids::node))
             continue;
 
-        auto comp = std::make_unique<NodeComponent> (model, child, selection, getBpm);
+        auto comp = std::make_unique<NodeComponent> (model, child, selection, getBpm, hostedLookup);
         addAndMakeVisible (*comp);
         nodeComps.push_back (std::move (comp));
     }
@@ -375,7 +376,8 @@ void GraphCanvas::nodePositionChangedInModel (NodeComponent& comp)
 
 void GraphCanvas::valueTreeChildAdded (juce::ValueTree& parent, juce::ValueTree& child)
 {
-    if (child.hasType (ids::node) && parent == observedTree)
+    // Node list changes and hosted-param exposure both change node layout.
+    if ((child.hasType (ids::node) && parent == observedTree) || child.hasType (ids::exposed))
         rebuild();
     else
         repaint();
@@ -383,7 +385,7 @@ void GraphCanvas::valueTreeChildAdded (juce::ValueTree& parent, juce::ValueTree&
 
 void GraphCanvas::valueTreeChildRemoved (juce::ValueTree& parent, juce::ValueTree& child, int)
 {
-    if (child.hasType (ids::node) && parent == observedTree)
+    if ((child.hasType (ids::node) && parent == observedTree) || child.hasType (ids::exposed))
         rebuild();
     else
         repaint();
