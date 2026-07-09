@@ -26,6 +26,7 @@ struct ParamSpec
     const char* name;
     float min, max, def;
     float skew = 1.0f;   // <1 gives finer resolution at the low end (freq/time params)
+    const char* unit = "";   // "Hz", "dB", "ms", "%", "shape", "sync" — drives value display
 
     float normalise (float value) const
     {
@@ -46,6 +47,10 @@ juce::String nodeTypeToString (NodeType);
 NodeType nodeTypeFromString (const juce::String&);
 NodeKind kindOf (NodeType);
 const std::vector<ParamSpec>& paramSpecsFor (NodeType);
+
+// Human-readable value with units: "804 Hz", "6.2 kHz", "-3.5 dB",
+// "250 ms (1/8)" (note match at the given BPM), "35%", "Saw", "1/4".
+juce::String formatParamValue (const ParamSpec&, float value, double bpm);
 
 // ValueTree schema identifiers. The graph is stored as flat nodes + edge list,
 // nodes referenced by integer id only — a constraint from the spec so that

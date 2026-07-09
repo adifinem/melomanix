@@ -13,7 +13,7 @@ class GraphCanvas : public juce::Component,
                     private juce::Timer
 {
 public:
-    GraphCanvas (GraphModel&, SelectionModel&);
+    GraphCanvas (GraphModel&, SelectionModel&, std::function<double()> bpmProvider);
     ~GraphCanvas() override;
 
     void resized() override;
@@ -51,6 +51,7 @@ private:
 
     GraphModel& model;
     SelectionModel& selection;
+    std::function<double()> getBpm;
     juce::ValueTree observedTree;
 
     std::vector<std::unique_ptr<NodeComponent>> nodeComps;

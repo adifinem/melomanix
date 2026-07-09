@@ -3,8 +3,8 @@
 namespace melo
 {
 
-GraphCanvas::GraphCanvas (GraphModel& m, SelectionModel& sel)
-    : model (m), selection (sel)
+GraphCanvas::GraphCanvas (GraphModel& m, SelectionModel& sel, std::function<double()> bpmProvider)
+    : model (m), selection (sel), getBpm (std::move (bpmProvider))
 {
     observedTree = model.state();
     observedTree.addListener (this);
@@ -60,7 +60,7 @@ void GraphCanvas::rebuild()
         if (! child.hasType (ids::node))
             continue;
 
-        auto comp = std::make_unique<NodeComponent> (model, child, selection);
+        auto comp = std::make_unique<NodeComponent> (model, child, selection, getBpm);
         addAndMakeVisible (*comp);
         nodeComps.push_back (std::move (comp));
     }

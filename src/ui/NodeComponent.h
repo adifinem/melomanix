@@ -36,7 +36,8 @@ class NodeComponent : public juce::Component,
                       private juce::ValueTree::Listener
 {
 public:
-    NodeComponent (GraphModel&, juce::ValueTree nodeTree, SelectionModel&);
+    NodeComponent (GraphModel&, juce::ValueTree nodeTree, SelectionModel&,
+                   std::function<double()> bpmProvider);
     ~NodeComponent() override;
 
     void paint (juce::Graphics&) override;
@@ -68,6 +69,7 @@ private:
     GraphModel& model;
     juce::ValueTree tree;
     SelectionModel& selection;
+    std::function<double()> getBpm;
 
     const int nodeId;
     const NodeType type;

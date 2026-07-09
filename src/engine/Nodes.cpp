@@ -27,10 +27,11 @@ double LFONode::effectiveRate (float rateHz, int sync, double bpm)
 
 float LFONode::evaluate (const ProcessContext& ctx)
 {
-    auto rate  = effectiveRate (params[0].current(),
-                                (int) std::lround (params[1].current()), ctx.bpm);
-    auto shape = (int) std::lround (params[2].current());
-    auto depth = params[3].current();
+    auto rate   = effectiveRate (params[0].current(),
+                                 (int) std::lround (params[1].current()), ctx.bpm);
+    auto shape  = (int) std::lround (params[2].current());
+    auto depth  = params[3].current();
+    auto smooth = params[4].current();
 
     // Phase derived from transport time, so LFOs stay deterministic against
     // the playhead (and the timeline pane can render the identical curve).
@@ -38,7 +39,18 @@ float LFONode::evaluate (const ProcessContext& ctx)
     if (phase < 0.0f)
         phase += 1.0f;
 
-    return 0.5f + (shapeValue (shape, phase) - 0.5f) * depth;
+    auto target = 0.5f + (shapeValue (shape, phase) - 0.5f) * depth;
+
+    // Output slew: smooth in (0,1] maps to a time constant up to ~300ms,
+    // rounding off steps in square/saw shapes.
+    if (smooth <= 0.001f)
+        return slewed = target;
+
+    auto dt = ctx.numSamples > 0 ? ctx.numSamples / ctx.sampleRate
+                                 : ctx.maxBlockSize / ctx.sampleRate;
+    auto alpha = (float) (1.0 - std::exp (-dt / (0.3 * (double) smooth)));
+    slewed += (target - slewed) * alpha;
+    return slewed;
 }
 
 void EQNode::prepare (const ProcessContext& ctx)

@@ -47,10 +47,12 @@ void Socket::mouseUp (const juce::MouseEvent& e)
 
 // --- NodeComponent ------------------------------------------------------
 
-NodeComponent::NodeComponent (GraphModel& m, juce::ValueTree nodeTree, SelectionModel& sel)
+NodeComponent::NodeComponent (GraphModel& m, juce::ValueTree nodeTree, SelectionModel& sel,
+                              std::function<double()> bpmProvider)
     : model (m),
       tree (nodeTree),
       selection (sel),
+      getBpm (std::move (bpmProvider)),
       nodeId (nodeTree.getProperty (ids::nodeId)),
       type (nodeTypeFromString (nodeTree.getProperty (ids::type).toString()))
 {
@@ -77,6 +79,14 @@ NodeComponent::NodeComponent (GraphModel& m, juce::ValueTree nodeTree, Selection
                                             interval, (double) spec.skew });
         row->slider.setValue (model.getParamValue (nodeId, spec.id), juce::dontSendNotification);
         row->slider.setColour (juce::Slider::trackColourId, theme::controlSignal.withAlpha (0.4f));
+
+        // Value bubble with real units (and note values at the host tempo)
+        // on hover and while dragging.
+        row->slider.textFromValueFunction = [spec, this] (double v)
+        {
+            return formatParamValue (spec, (float) v, getBpm != nullptr ? getBpm() : 0.0);
+        };
+        row->slider.setPopupDisplayEnabled (true, true, nullptr);
         row->slider.onValueChange = [this, id = juce::String (spec.id), s = &row->slider]
         {
             if (! updatingFromTree)

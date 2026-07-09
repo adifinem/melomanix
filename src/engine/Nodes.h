@@ -111,6 +111,9 @@ public:
     // Effective cycles-per-second: the Hz knob when sync is off, otherwise
     // derived from host tempo (sync 1..5 = 1/1, 1/2, 1/4, 1/8, 1/16 notes).
     static double effectiveRate (float rateHz, int sync, double bpm);
+
+private:
+    float slewed = 0.5f;   // one-pole smoothed output state for the smooth param
 };
 
 class EQNode : public EngineNode

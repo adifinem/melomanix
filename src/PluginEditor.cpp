@@ -4,7 +4,7 @@ MelomanixEditor::MelomanixEditor (MelomanixProcessor& p)
     : AudioProcessorEditor (p),
       processor (p),
       macroStrip (p),
-      graphCanvas (p.graphModel, selection),
+      graphCanvas (p.graphModel, selection, [&p] { return p.getBpm(); }),
       timelinePane (p, selection)
 {
     addAndMakeVisible (macroStrip);
