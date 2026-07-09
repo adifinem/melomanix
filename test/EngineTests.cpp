@@ -165,12 +165,47 @@ int main()
     expect (juce::approximatelyEqual (LFONode::effectiveRate (3.3f, 1, 60.0), 0.25),
             "1/1 note at 60bpm = 0.25Hz");
 
+    // --- Curve node -------------------------------------------------------
+    {
+        std::vector<CurvePoint> ramp { { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 0.0f } };
+        expect (juce::approximatelyEqual (CurveNode::valueAt (ramp, 0.5f), 0.5f),
+                "linear segment interpolates");
+        expect (juce::approximatelyEqual (CurveNode::valueAt (ramp, -0.2f), 0.0f)
+                && juce::approximatelyEqual (CurveNode::valueAt (ramp, 1.2f), 1.0f),
+                "curve clamps outside its points");
+
+        ramp[0].tension = 1.0f;
+        expect (CurveNode::valueAt (ramp, 0.5f) < 0.3f, "positive tension eases in");
+        ramp[0].tension = -1.0f;
+        expect (CurveNode::valueAt (ramp, 0.5f) > 0.7f, "negative tension eases out");
+
+        auto curveId = model.addNode (NodeType::curve, 0.0f, 400.0f);
+        auto curveTree = model.getNode (curveId);
+        int pointCount = 0;
+        for (auto child : curveTree)
+            if (child.hasType (ids::point))
+                ++pointCount;
+        expect (pointCount == 3, "new curve node has default points");
+
+        expect (model.addModConnection (curveId, delay, "feedback"),
+                "curve output patches into a DSP param");
+
+        auto withCurve = compileGraph (model.state(), macroValues);
+        CurveNode* compiledCurve = nullptr;
+        for (auto& n : withCurve->nodes)
+            if (n->modelNodeId == curveId)
+                compiledCurve = dynamic_cast<CurveNode*> (n.get());
+        expect (compiledCurve != nullptr && compiledCurve->points.size() == 3,
+                "compiled curve carries its sorted points");
+    }
+
     // --- Serialisation round-trip ---------------------------------------
     auto xml = model.state().toXmlString();
     GraphModel restored;
     restored.replaceState (juce::ValueTree::fromXml (xml));
     auto recompiled = compileGraph (restored.state(), macroValues);
-    expect (recompiled != nullptr && recompiled->nodes.size() == compiled->nodes.size(),
+    auto reference = compileGraph (model.state(), macroValues);
+    expect (recompiled != nullptr && recompiled->nodes.size() == reference->nodes.size(),
             "graph survives XML round-trip");
 
     std::cout << (failures == 0 ? "\nALL ENGINE TESTS PASSED\n"

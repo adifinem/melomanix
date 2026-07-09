@@ -39,6 +39,7 @@ namespace melo::theme
             case NodeType::delay:    return "Delay";
             case NodeType::lfo:      return "LFO";
             case NodeType::macro:    return "Macro " + juce::String (macroIndex + 1);
+            case NodeType::curve:    return "Curve";
         }
         return {};
     }

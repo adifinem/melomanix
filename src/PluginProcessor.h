@@ -42,6 +42,7 @@ public:
     // Editor reads these to animate the timeline playhead and render
     // tempo-synced lanes identically to the engine.
     double getPlayheadSeconds() const { return lastPlayheadSeconds.load(); }
+    double getPlayheadBeats() const { return lastPlayheadBeats.load(); }
     double getBpm() const { return lastBpm.load(); }
 
 private:
@@ -64,6 +65,7 @@ private:
     std::vector<std::atomic<float>*> macroValues;
 
     std::atomic<double> lastPlayheadSeconds { 0.0 };
+    std::atomic<double> lastPlayheadBeats { 0.0 };
     std::atomic<double> lastBpm { 120.0 };
     double internalClockSeconds = 0.0;
     double currentSampleRate = 44100.0;

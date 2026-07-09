@@ -12,6 +12,7 @@ struct ProcessContext
     double sampleRate = 44100.0;
     int    maxBlockSize = 512;
     double playheadSeconds = 0.0;   // for time-synced controllers (LFO phase, timeline display)
+    double playheadBeats = 0.0;     // musical position (host ppq, or derived from seconds*bpm)
     double bpm = 120.0;             // host tempo, for tempo-synced LFO rates
     int    numSamples = 0;
 };
@@ -142,6 +143,31 @@ public:
 private:
     juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Linear> delayLine { 1 };
     double sampleRate = 44100.0;
+};
+
+struct CurvePoint
+{
+    float t = 0.0f;         // position within the loop, [0,1]
+    float v = 0.5f;         // output value, [0,1]
+    float tension = 0.0f;   // shapes the segment to the next point, [-1,1]
+};
+
+// A drawn breakpoint controller: loops over `length` beats of the transport,
+// interpolating between user-placed points with per-segment tension.
+class CurveNode : public EngineNode
+{
+public:
+    CurveNode() : EngineNode (NodeType::curve) {}
+
+    float evaluate (const ProcessContext&) override;
+
+    // Static so the timeline editor renders the exact same curve it edits.
+    // Points must be sorted by t. Tension >0 holds toward the start value
+    // longer (ease-in), <0 rushes toward the end value (ease-out).
+    static float valueAt (const std::vector<CurvePoint>& sortedPoints, float phase);
+    static float shapeSegment (float x, float tension);
+
+    std::vector<CurvePoint> points;   // set by the compiler, sorted by t
 };
 
 // A macro is a controller whose value is a host-automatable parameter,

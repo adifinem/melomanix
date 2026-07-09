@@ -108,6 +108,19 @@ std::shared_ptr<CompiledGraph> compileGraph (const juce::ValueTree& graphTree,
             case NodeType::eq:       node = std::make_unique<EQNode>();  break;
             case NodeType::delay:    node = std::make_unique<DelayNode>(); break;
             case NodeType::lfo:      node = std::make_unique<LFONode>(); break;
+            case NodeType::curve:
+            {
+                auto curve = std::make_unique<CurveNode>();
+                for (auto pointTree : child)
+                    if (pointTree.hasType (ids::point))
+                        curve->points.push_back ({ pointTree.getProperty (ids::pointT, 0.0f),
+                                                   pointTree.getProperty (ids::pointV, 0.5f),
+                                                   pointTree.getProperty (ids::tension, 0.0f) });
+                std::sort (curve->points.begin(), curve->points.end(),
+                           [] (auto& a, auto& b) { return a.t < b.t; });
+                node = std::move (curve);
+                break;
+            }
             case NodeType::macro:
             {
                 int macroIndex = child.getProperty (ids::macroIndex, 0);

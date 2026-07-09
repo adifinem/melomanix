@@ -70,6 +70,7 @@ void MelomanixProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     // that don't report position).
     double seconds = internalClockSeconds;
     bool haveHostTime = false;
+    std::optional<double> hostBeats;
 
     if (auto* playHead = getPlayHead())
         if (auto position = playHead->getPosition())
@@ -81,18 +82,23 @@ void MelomanixProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             }
             if (auto bpm = position->getBpm())
                 lastBpm.store (*bpm);
+            if (auto ppq = position->getPpqPosition())
+                hostBeats = *ppq;
         }
 
     if (! haveHostTime)
         internalClockSeconds += buffer.getNumSamples() / currentSampleRate;
 
+    auto beats = hostBeats.value_or (seconds * lastBpm.load() / 60.0);
     lastPlayheadSeconds.store (seconds);
+    lastPlayheadBeats.store (beats);
 
     melo::ProcessContext ctx;
     ctx.sampleRate = currentSampleRate;
     ctx.maxBlockSize = buffer.getNumSamples();
     ctx.numSamples = buffer.getNumSamples();
     ctx.playheadSeconds = seconds;
+    ctx.playheadBeats = beats;
     ctx.bpm = lastBpm.load();
 
     engine.process (buffer, ctx);

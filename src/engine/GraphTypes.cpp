@@ -13,6 +13,7 @@ juce::String nodeTypeToString (NodeType t)
         case NodeType::delay:    return "delay";
         case NodeType::lfo:      return "lfo";
         case NodeType::macro:    return "macro";
+        case NodeType::curve:    return "curve";
     }
     jassertfalse;
     return "audioIn";
@@ -25,6 +26,7 @@ NodeType nodeTypeFromString (const juce::String& s)
     if (s == "delay")    return NodeType::delay;
     if (s == "lfo")      return NodeType::lfo;
     if (s == "macro")    return NodeType::macro;
+    if (s == "curve")    return NodeType::curve;
     return NodeType::audioIn;
 }
 
@@ -37,7 +39,8 @@ NodeKind kindOf (NodeType t)
         case NodeType::eq:
         case NodeType::delay:    return NodeKind::dsp;
         case NodeType::lfo:
-        case NodeType::macro:    return NodeKind::controller;
+        case NodeType::macro:
+        case NodeType::curve:    return NodeKind::controller;
     }
     jassertfalse;
     return NodeKind::io;
@@ -71,11 +74,17 @@ const std::vector<ParamSpec>& paramSpecsFor (NodeType t)
         { "smooth", "Smooth", 0.0f,   1.0f, 0.0f, 1.0f, "%"     },  // output slew
     };
 
+    static const std::vector<ParamSpec> curveSpecs {
+        { "length", "Length", 0.25f, 32.0f, 4.0f, 0.5f, "beats" },
+        { "depth",  "Depth",  0.0f,   1.0f, 1.0f, 1.0f, "%"     },
+    };
+
     switch (t)
     {
         case NodeType::eq:       return eqSpecs;
         case NodeType::delay:    return delaySpecs;
         case NodeType::lfo:      return lfoSpecs;
+        case NodeType::curve:    return curveSpecs;
         case NodeType::audioIn:
         case NodeType::audioOut:
         case NodeType::macro:    return none;

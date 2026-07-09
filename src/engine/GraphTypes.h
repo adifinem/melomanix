@@ -13,7 +13,8 @@ enum class NodeType
     eq,
     delay,
     lfo,
-    macro
+    macro,
+    curve
 };
 
 // Controllers emit a block-rate control value in [0, 1]; DSP nodes process audio.
@@ -73,6 +74,13 @@ namespace ids
     inline const juce::Identifier depth      { "depth" };
     inline const juce::Identifier nextNodeId { "nextNodeId" };
     inline const juce::Identifier macroIndex { "macroIndex" };
+
+    // Curve node breakpoints: children of the NODE, position/value in [0,1],
+    // tension in [-1,1] shaping the segment to the NEXT point.
+    inline const juce::Identifier point     { "POINT" };
+    inline const juce::Identifier pointT    { "t" };
+    inline const juce::Identifier pointV    { "v" };
+    inline const juce::Identifier tension   { "tension" };
 }
 
 } // namespace melo

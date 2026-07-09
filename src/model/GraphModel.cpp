@@ -52,6 +52,19 @@ int GraphModel::addNode (NodeType type, float x, float y)
         node.addChild (p, -1, nullptr);
     }
 
+    // Curves start as a gentle rise-and-fall so patching one is instantly audible.
+    if (type == NodeType::curve)
+    {
+        for (auto [t, v] : { std::pair { 0.0f, 0.25f }, { 0.5f, 0.85f }, { 1.0f, 0.25f } })
+        {
+            juce::ValueTree p (ids::point);
+            p.setProperty (ids::pointT, t, nullptr);
+            p.setProperty (ids::pointV, v, nullptr);
+            p.setProperty (ids::tension, 0.0f, nullptr);
+            node.addChild (p, -1, nullptr);
+        }
+    }
+
     tree.addChild (node, -1, nullptr);
     return id;
 }

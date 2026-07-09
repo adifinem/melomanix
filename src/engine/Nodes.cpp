@@ -53,6 +53,52 @@ float LFONode::evaluate (const ProcessContext& ctx)
     return slewed;
 }
 
+float CurveNode::shapeSegment (float x, float tension)
+{
+    x = juce::jlimit (0.0f, 1.0f, x);
+    if (std::abs (tension) < 0.001f)
+        return x;
+    auto exponent = std::pow (3.0f, std::abs (tension));   // up to cubic ease
+    return tension > 0.0f ? std::pow (x, exponent)
+                          : 1.0f - std::pow (1.0f - x, exponent);
+}
+
+float CurveNode::valueAt (const std::vector<CurvePoint>& pts, float phase)
+{
+    if (pts.empty())
+        return 0.5f;
+    if (phase <= pts.front().t)
+        return pts.front().v;
+    if (phase >= pts.back().t)
+        return pts.back().v;
+
+    for (size_t i = 1; i < pts.size(); ++i)
+    {
+        if (phase <= pts[i].t)
+        {
+            auto& a = pts[i - 1];
+            auto& b = pts[i];
+            auto span = juce::jmax (0.0001f, b.t - a.t);
+            auto x = shapeSegment ((phase - a.t) / span, a.tension);
+            return a.v + (b.v - a.v) * x;
+        }
+    }
+    return pts.back().v;
+}
+
+float CurveNode::evaluate (const ProcessContext& ctx)
+{
+    auto lengthBeats = params[0].current();
+    auto depth = params[1].current();
+
+    auto phase = (float) std::fmod (ctx.playheadBeats / (double) lengthBeats, 1.0);
+    if (phase < 0.0f)
+        phase += 1.0f;
+
+    auto value = valueAt (points, phase);
+    return 0.5f + (value - 0.5f) * depth;
+}
+
 void EQNode::prepare (const ProcessContext& ctx)
 {
     EngineNode::prepare (ctx);

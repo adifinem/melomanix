@@ -187,15 +187,17 @@ void GraphCanvas::showAddNodeMenu (juce::Point<int> canvasPos)
     juce::PopupMenu menu;
     menu.addSectionHeader ("Add node");
     menu.addItem (1, "LFO");
-    menu.addItem (2, "EQ");
-    menu.addItem (3, "Delay");
+    menu.addItem (2, "Curve");
+    menu.addItem (3, "EQ");
+    menu.addItem (4, "Delay");
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
                         [this, contentPos] (int result)
                         {
                             if (result == 1) model.addNode (NodeType::lfo,   contentPos.x, contentPos.y);
-                            if (result == 2) model.addNode (NodeType::eq,    contentPos.x, contentPos.y);
-                            if (result == 3) model.addNode (NodeType::delay, contentPos.x, contentPos.y);
+                            if (result == 2) model.addNode (NodeType::curve, contentPos.x, contentPos.y);
+                            if (result == 3) model.addNode (NodeType::eq,    contentPos.x, contentPos.y);
+                            if (result == 4) model.addNode (NodeType::delay, contentPos.x, contentPos.y);
                         });
 }
 
