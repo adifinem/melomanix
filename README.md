@@ -23,4 +23,16 @@ cmake --build build
 
 Produces a VST3 (copied to `~/.vst3` by default) and a Standalone app under
 `build/Melomanix_artefacts/`. Windows VST3 builds are produced by the GitHub
-Actions workflow.
+Actions workflows.
+
+## Installing a release build (Windows / FL Studio)
+
+Grab `Melomanix-*-windows-VST3.zip` from the
+[releases page](../../releases), extract it, and copy the `Melomanix.vst3`
+folder into `C:\Program Files\Common Files\VST3\`. In FL Studio: Options →
+Manage plugins → Find more plugins (scan), then add "Melomanix" to a mixer
+insert. On Linux, use the `-linux-` zip and extract into `~/.vst3/`.
+
+## License
+
+AGPL-3.0 (matching the JUCE 8 open-source license). See [LICENSE](LICENSE).

@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+          - os: windows-latest
+            name: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libjack-jackd2-dev \
+            libfontconfig1-dev libfreetype-dev libx11-dev libxcomposite-dev \
+            libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev \
+            libxrender-dev libglu1-mesa-dev mesa-common-dev
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DMELOMANIX_COPY_PLUGIN=OFF
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target Melomanix_VST3
+
+      - name: Run engine tests
+        if: runner.os == 'Linux'
+        run: |
+          cmake --build build --config Release --target MelomanixTests
+          ./build/MelomanixTests_artefacts/Release/MelomanixTests
+
+      - name: Package VST3
+        shell: bash
+        run: |
+          cd build/Melomanix_artefacts/Release/VST3
+          cmake -E tar cf "Melomanix-${{ github.ref_name }}-${{ matrix.name }}-VST3.zip" --format=zip Melomanix.vst3
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/Melomanix_artefacts/Release/VST3/Melomanix-*.zip
+          generate_release_notes: true
