@@ -59,6 +59,7 @@ private:
     float zoom = 1.0f;
     juce::Point<float> panOffset { 0.0f, 0.0f };
     juce::Point<float> panDragStart;
+    bool centredOnce = false;
 
     // In-progress cable.
     Socket* dragSourceSocket = nullptr;

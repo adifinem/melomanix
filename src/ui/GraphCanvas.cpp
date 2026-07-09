@@ -43,7 +43,6 @@ void GraphCanvas::applyViewTransform()
 
 void GraphCanvas::resized()
 {
-    static bool centredOnce = false;
     if (! centredOnce && getWidth() > 0)
     {
         centredOnce = true;
@@ -301,10 +300,26 @@ void GraphCanvas::showDisconnectMenu (Socket& socket)
         menu.addItem (i + 1, "Disconnect " + title + (param.isNotEmpty() ? " (" + param + ")" : ""));
     }
 
+    // Depth choices for a modulated param socket — a stopgap until the
+    // matrix pane brings proper per-connection amount/transfer curves.
+    static constexpr float depths[] { 1.0f, 0.5f, 0.25f, 0.1f, -0.25f, -0.5f, -1.0f };
+    if (socket.kind == SocketKind::paramIn && matches.size() == 1)
+    {
+        juce::PopupMenu depthMenu;
+        auto current = (float) matches[0].getProperty (ids::depth, 1.0f);
+        for (int i = 0; i < (int) std::size (depths); ++i)
+            depthMenu.addItem (100 + i, juce::String ((int) (depths[i] * 100)) + "%",
+                               true, juce::approximatelyEqual (current, depths[i]));
+        menu.addSubMenu ("Mod depth", depthMenu);
+    }
+
     menu.showMenuAsync (juce::PopupMenu::Options(),
                         [this, matches] (int result)
                         {
-                            if (result > 0)
+                            if (result >= 100)
+                                juce::ValueTree (matches[0]).setProperty (ids::depth,
+                                                                          depths[result - 100], nullptr);
+                            else if (result > 0)
                                 model.removeConnection (matches[result - 1]);
                         });
 }

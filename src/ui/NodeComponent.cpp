@@ -70,8 +70,10 @@ NodeComponent::NodeComponent (GraphModel& m, juce::ValueTree nodeTree, Selection
 
         row->slider.setSliderStyle (juce::Slider::LinearHorizontal);
         row->slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        // Stepped params (like LFO shape) snap to integers.
+        auto interval = juce::String (spec.id) == "shape" ? 1.0 : 0.0;
         row->slider.setNormalisableRange ({ (double) spec.min, (double) spec.max,
-                                            0.0, (double) spec.skew });
+                                            interval, (double) spec.skew });
         row->slider.setValue (model.getParamValue (nodeId, spec.id), juce::dontSendNotification);
         row->slider.setColour (juce::Slider::trackColourId, theme::controlSignal.withAlpha (0.4f));
         row->slider.onValueChange = [this, id = juce::String (spec.id), s = &row->slider]
