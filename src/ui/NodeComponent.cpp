@@ -325,26 +325,29 @@ void NodeComponent::showContextMenu()
         menu.addSubMenu ("Expose parameter", paramsMenu);
     }
 
+    // Model mutations below rebuild the canvas and destroy this component,
+    // so the callback must not touch `this` — it captures the long-lived
+    // model/selection references and plain values instead.
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
-                        [this, instance] (int result)
+                        [&graphModel = model, &sel = selection, id = nodeId, instance] (int result)
                         {
                             if (result == 1)
                             {
-                                selection.clearIfSelected (nodeId);
-                                model.removeNode (nodeId);
+                                sel.clearIfSelected (id);
+                                graphModel.removeNode (id);
                             }
                             else if (result == 2)
                             {
-                                if (auto newId = model.duplicateNode (nodeId); newId >= 0)
-                                    selection.select (newId);
+                                if (auto newId = graphModel.duplicateNode (id); newId >= 0)
+                                    sel.select (newId);
                             }
                             else if (result >= 100 && instance != nullptr)
                             {
                                 auto index = result - 100;
-                                model.setHostedParamExposed (
-                                    nodeId, index,
+                                graphModel.setHostedParamExposed (
+                                    id, index,
                                     instance->getParameters()[index]->getName (40),
-                                    ! model.isHostedParamExposed (nodeId, index));
+                                    ! graphModel.isHostedParamExposed (id, index));
                             }
                         });
 }
@@ -358,26 +361,28 @@ void NodeComponent::showGroupContextMenu()
     menu.addItem (1, "Duplicate selection (" + juce::String (count) + " nodes)");
     menu.addItem (2, "Delete selection (" + juce::String (count) + " nodes)");
 
+    // As above: the first mutation destroys this component, so the callback
+    // only uses captured references to the long-lived model and selection.
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
-                        [this, group] (int result)
+                        [&graphModel = model, &sel = selection, group] (int result)
                         {
                             if (result == 1)
                             {
                                 std::set<int> copies;
                                 for (auto id : group)
-                                    if (auto newId = model.duplicateNode (id); newId >= 0)
+                                    if (auto newId = graphModel.duplicateNode (id); newId >= 0)
                                         copies.insert (newId);
-                                selection.setMultiple (std::move (copies));
+                                sel.setMultiple (std::move (copies));
                             }
                             else if (result == 2)
                             {
                                 for (auto id : group)
                                 {
-                                    auto node = model.getNode (id);
-                                    if (node.isValid() && kindOf (model.getNodeType (node)) != NodeKind::io)
+                                    auto node = graphModel.getNode (id);
+                                    if (node.isValid() && kindOf (graphModel.getNodeType (node)) != NodeKind::io)
                                     {
-                                        selection.clearIfSelected (id);
-                                        model.removeNode (id);
+                                        sel.clearIfSelected (id);
+                                        graphModel.removeNode (id);
                                     }
                                 }
                             }
@@ -485,20 +490,21 @@ void NodeComponent::itemDropped (const SourceDetails& details)
 
     auto macroIndex = details.description.toString().fromFirstOccurrenceOf ("macro:", false, false).getIntValue();
 
-    auto macroNode = model.findMacroNode (macroIndex);
-    int macroNodeId;
-    if (macroNode.isValid())
-    {
-        macroNodeId = macroNode.getProperty (ids::nodeId);
-    }
-    else
-    {
-        macroNodeId = model.addMacroNode (macroIndex,
-                                          (float) getX() - width - 60.0f,
-                                          (float) getY() + (float) row * rowHeight);
-    }
+    // Adding a node rebuilds the canvas, destroying this component while
+    // this method is still running — copy everything out of it first and
+    // only touch locals afterwards.
+    auto& graphModel = model;
+    auto targetNodeId = nodeId;
+    auto paramId = juce::String (rows[(size_t) row]->spec.id);
+    auto macroX = (float) getX() - width - 60.0f;
+    auto macroY = (float) getY() + (float) row * rowHeight;
 
-    model.addModConnection (macroNodeId, nodeId, rows[(size_t) row]->spec.id);
+    auto macroNode = graphModel.findMacroNode (macroIndex);
+    auto macroNodeId = macroNode.isValid()
+                           ? (int) macroNode.getProperty (ids::nodeId)
+                           : graphModel.addMacroNode (macroIndex, macroX, macroY);
+
+    graphModel.addModConnection (macroNodeId, targetNodeId, paramId);
 }
 
 } // namespace melo
