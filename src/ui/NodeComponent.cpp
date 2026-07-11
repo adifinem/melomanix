@@ -295,6 +295,7 @@ void NodeComponent::showContextMenu()
         return;
 
     juce::PopupMenu menu;
+    menu.addItem (2, "Duplicate node");
     menu.addItem (1, "Delete node");
 
     // Hosted nodes: expose plugin parameters as modulation sockets.
@@ -320,6 +321,11 @@ void NodeComponent::showContextMenu()
                             {
                                 selection.clearIfSelected (nodeId);
                                 model.removeNode (nodeId);
+                            }
+                            else if (result == 2)
+                            {
+                                if (auto newId = model.duplicateNode (nodeId); newId >= 0)
+                                    selection.select (newId);
                             }
                             else if (result >= 100 && instance != nullptr)
                             {

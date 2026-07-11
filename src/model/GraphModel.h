@@ -26,6 +26,9 @@ public:
     // also drops any mod connection targeting it.
     void setHostedParamExposed (int nodeId, int paramIndex, const juce::String& name, bool exposed);
     bool isHostedParamExposed (int nodeId, int paramIndex) const;
+    // Copy of the node (params, points, plugin state) offset +40,+40;
+    // connections are not copied. Returns the new id, or -1 for IO nodes.
+    int  duplicateNode (int nodeId);
     void removeNode (int nodeId);
 
     // Audio edge (src's audio out -> dst's audio in). Returns false if rejected.

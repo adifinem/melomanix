@@ -198,6 +198,34 @@ int main()
                 compiledCurve = dynamic_cast<CurveNode*> (n.get());
         expect (compiledCurve != nullptr && compiledCurve->points.size() == 3,
                 "compiled curve carries its sorted points");
+
+        // --- Node duplication -------------------------------------------
+        model.setParamValue (curveId, "length", 8.0f);
+        auto dupId = model.duplicateNode (curveId);
+        expect (dupId > curveId, "duplicate gets a fresh node id");
+
+        auto dup = model.getNode (dupId);
+        int dupPoints = 0;
+        for (auto child : dup)
+            if (child.hasType (ids::point))
+                ++dupPoints;
+        expect (dupPoints == 3, "duplicate copies curve points");
+        expect (juce::approximatelyEqual (model.getParamValue (dupId, "length"), 8.0f),
+                "duplicate copies parameter values");
+        expect (juce::approximatelyEqual ((float) dup.getProperty (ids::posX),
+                                          (float) curveTree.getProperty (ids::posX) + 40.0f),
+                "duplicate offsets its position");
+
+        int dupConns = 0;
+        for (auto child : model.state())
+            if (child.hasType (ids::conn)
+                && ((int) child.getProperty (ids::srcNode) == dupId
+                    || (int) child.getProperty (ids::dstNode) == dupId))
+                ++dupConns;
+        expect (dupConns == 0, "duplicate carries no connections");
+
+        expect (model.duplicateNode (findIO (NodeType::audioIn)) == -1,
+                "IO nodes cannot be duplicated");
     }
 
     // --- Serialisation round-trip ---------------------------------------

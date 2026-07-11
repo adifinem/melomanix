@@ -130,6 +130,25 @@ bool GraphModel::isHostedParamExposed (int nodeId, int paramIndex) const
     return false;
 }
 
+int GraphModel::duplicateNode (int nodeId)
+{
+    auto source = getNode (nodeId);
+    if (! source.isValid() || kindOf (getNodeType (source)) == NodeKind::io)
+        return -1;
+
+    // Copies params, curve points, exposed hosted params and plugin state;
+    // connections are intentionally not copied (fan-in rules would reject
+    // most of them — duplicating is about reusing a node's settings).
+    auto copy = source.createCopy();
+    auto id = takeNextNodeId();
+    copy.setProperty (ids::nodeId, id, nullptr);
+    copy.setProperty (ids::posX, (float) source.getProperty (ids::posX) + 40.0f, nullptr);
+    copy.setProperty (ids::posY, (float) source.getProperty (ids::posY) + 40.0f, nullptr);
+    copy.removeProperty (ids::pluginError, nullptr);
+    tree.addChild (copy, -1, nullptr);
+    return id;
+}
+
 void GraphModel::removeNode (int nodeId)
 {
     for (int i = tree.getNumChildren(); --i >= 0;)
