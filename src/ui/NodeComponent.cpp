@@ -121,10 +121,27 @@ void NodeComponent::buildStaticRows()
         {
             return formatParamValue (spec, (float) v, getBpm != nullptr ? getBpm() : 0.0);
         };
-        row->slider.onValueChange = [this, id = juce::String (spec.id), s = &row->slider]
+        // Curve length is sticky on musical divisions (sixteenths up to 8
+        // bars, including triple/dotted lengths); hold CTRL for free values.
+        auto snapMusical = type == NodeType::curve && juce::String (spec.id) == "length";
+        row->slider.onValueChange = [this, id = juce::String (spec.id), s = &row->slider, snapMusical]
         {
-            if (! updatingFromTree)
-                model.setParamValue (nodeId, id, (float) s->getValue());
+            if (updatingFromTree)
+                return;
+
+            auto value = s->getValue();
+            if (snapMusical && ! juce::ModifierKeys::getCurrentModifiers().isCtrlDown())
+            {
+                static constexpr double divisions[] = { 0.25, 0.5, 1.0, 2.0, 3.0, 4.0,
+                                                        6.0, 8.0, 12.0, 16.0, 24.0, 32.0 };
+                auto snapped = divisions[0];
+                for (auto d : divisions)
+                    if (std::abs (d - value) < std::abs (snapped - value))
+                        snapped = d;
+                if (snapped != value)
+                    s->setValue (value = snapped, juce::dontSendNotification);
+            }
+            model.setParamValue (nodeId, id, (float) value);
         };
 
         addRow (std::move (row));
