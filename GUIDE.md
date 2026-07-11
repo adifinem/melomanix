@@ -23,6 +23,45 @@ Color code everywhere: **orange = audio**, **teal = control signals**.
 
 ---
 
+## New in v0.4 — editing quality-of-life: Will's seven requests
+
+All seven requests from the first user feedback round ([#1](../../issues/1)).
+
+- **Cable drags follow the mouse.** The dragged cable used to drift away
+  from the cursor once you'd panned the canvas; it now sticks to the
+  pointer at any pan and zoom.
+- **Curve length snaps to musical values.** The Length slider lands on
+  1/16-note through 8-bar values (including triplet-friendly 3, 6, 12, 24
+  beats). Hold **CTRL** while dragging for free, unquantised lengths.
+- **Snap grid for curve points.** With a curve selected, a **grid** button
+  appears in the timeline pane's top-right corner: off, 2×2, 4×4, 6×4,
+  4×6, 8×8 or 16×8. Dragged and double-click-added points stick to grid
+  intersections; **CTRL** bypasses. Each curve remembers its own grid.
+- **Duplicate nodes.** Right-click a node → **Duplicate node**. The copy
+  keeps all parameter values, curve points and (for hosted plugins) the
+  plugin and its state, and lands slightly offset. Cables aren't copied.
+- **Multi-select.** Left-drag on empty canvas draws a selection box; every
+  node inside becomes a group you can drag as one, or right-click for
+  **Duplicate/Delete selection**. Clicking empty canvas clears it.
+  **Canvas panning is now middle-mouse drag** (wheel still zooms) —
+  left-drag is reserved for selection, Blender-style.
+- **Matrix pane.** New collapsible pane on the left listing every
+  connection in the patch. Modulation connections get two sliders:
+  **amount** (−100%..+100% — negative *inverts* the modulation, e.g. LFO 1
+  into a VST parameter upside-down) and **offset** (shifts the modulation
+  centre). Changes apply live. Collapse it with the `<` button to give the
+  graph the space back.
+- **Appearance.** Right-click the canvas → **Appearance**: pick the
+  **Slate** (classic), **Light** or **Neon** palette — saved with your
+  project — and toggle **Cable glow**, which makes control cables brighten
+  and thicken with the live value flowing through them.
+
+**Try it:** add a Curve, set grid 4×4, double-click to add snapped points;
+band-select a few nodes and drag them as a block; then open the matrix,
+drag **amount** negative on a connection and watch the modulation flip.
+
+---
+
 ## New in v0.3.1 — plugin loading that actually finds your plugins
 
 v0.3.0's file dialog was broken on Windows (it showed only folders — you
