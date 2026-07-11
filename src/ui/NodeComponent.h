@@ -68,6 +68,7 @@ public:
 private:
     void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier&) override;
     void showContextMenu();
+    void showGroupContextMenu();
     int paramRowAt (int y) const;
 
     GraphModel& model;

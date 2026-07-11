@@ -189,7 +189,7 @@ void NodeComponent::buildHostedRows()
 void NodeComponent::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat().reduced (1.0f);
-    auto isSelected = selection.getSelectedNodeId() == nodeId;
+    auto isSelected = selection.isSelected (nodeId);
 
     g.setColour (theme::nodeBody);
     g.fillRoundedRectangle (bounds, 6.0f);
@@ -254,7 +254,9 @@ void NodeComponent::resized()
 
 void NodeComponent::mouseDown (const juce::MouseEvent& e)
 {
-    selection.select (nodeId);
+    // Clicking inside an existing group keeps it (so it can be dragged as
+    // one); clicking an unselected node collapses the selection to it.
+    selection.setPrimaryKeepingGroup (nodeId);
     getParentComponent()->repaint();
 
     if (e.mods.isPopupMenu())
@@ -263,6 +265,8 @@ void NodeComponent::mouseDown (const juce::MouseEvent& e)
         return;
     }
     dragger.startDraggingComponent (this, e);
+    if (auto* canvas = findParentComponentOfClass<GraphCanvas>())
+        canvas->nodeDragStarted (*this);
 }
 
 void NodeComponent::mouseDrag (const juce::MouseEvent& e)
@@ -290,6 +294,13 @@ void NodeComponent::mouseDoubleClick (const juce::MouseEvent&)
 
 void NodeComponent::showContextMenu()
 {
+    // A grouped node offers group actions instead of single-node ones.
+    if (selection.isGroup() && selection.getGroup().count (nodeId) > 0)
+    {
+        showGroupContextMenu();
+        return;
+    }
+
     // IO nodes are fixed plumbing; everything else can be removed.
     if (kindOf (type) == NodeKind::io)
         return;
@@ -334,6 +345,41 @@ void NodeComponent::showContextMenu()
                                     nodeId, index,
                                     instance->getParameters()[index]->getName (40),
                                     ! model.isHostedParamExposed (nodeId, index));
+                            }
+                        });
+}
+
+void NodeComponent::showGroupContextMenu()
+{
+    auto group = selection.getGroup();   // copy: the selection mutates below
+    auto count = (int) group.size();
+
+    juce::PopupMenu menu;
+    menu.addItem (1, "Duplicate selection (" + juce::String (count) + " nodes)");
+    menu.addItem (2, "Delete selection (" + juce::String (count) + " nodes)");
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                        [this, group] (int result)
+                        {
+                            if (result == 1)
+                            {
+                                std::set<int> copies;
+                                for (auto id : group)
+                                    if (auto newId = model.duplicateNode (id); newId >= 0)
+                                        copies.insert (newId);
+                                selection.setMultiple (std::move (copies));
+                            }
+                            else if (result == 2)
+                            {
+                                for (auto id : group)
+                                {
+                                    auto node = model.getNode (id);
+                                    if (node.isValid() && kindOf (model.getNodeType (node)) != NodeKind::io)
+                                    {
+                                        selection.clearIfSelected (id);
+                                        model.removeNode (id);
+                                    }
+                                }
                             }
                         });
 }

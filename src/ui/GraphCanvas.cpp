@@ -1,5 +1,6 @@
 #include "GraphCanvas.h"
 #include "../engine/HostedPlugin.h"
+#include <set>
 
 namespace melo
 {
@@ -99,6 +100,14 @@ void GraphCanvas::paint (juce::Graphics& g)
     }
 
     drawCables (g);
+
+    if (banding && ! bandRect.isEmpty())
+    {
+        g.setColour (theme::nodeSelected.withAlpha (0.12f));
+        g.fillRect (bandRect);
+        g.setColour (theme::nodeSelected.withAlpha (0.8f));
+        g.drawRect (bandRect, 1.0f);
+    }
 }
 
 static void drawCablePath (juce::Graphics& g, juce::Point<float> from, juce::Point<float> to,
@@ -159,16 +168,56 @@ void GraphCanvas::mouseDown (const juce::MouseEvent& e)
         showAddNodeMenu (e.getPosition());
         return;
     }
-    panDragStart = panOffset;
+
+    // Blender-style: middle mouse pans, left-drag rubber-band-selects.
+    if (e.mods.isMiddleButtonDown())
+    {
+        panDragStart = panOffset;
+        return;
+    }
+
+    banding = true;
+    bandStart = e.position;
+    bandRect = {};
 }
 
 void GraphCanvas::mouseDrag (const juce::MouseEvent& e)
 {
-    if (! e.mods.isPopupMenu())
+    if (e.mods.isMiddleButtonDown())
     {
         panOffset = panDragStart + e.getOffsetFromDragStart().toFloat();
         applyViewTransform();
+        return;
     }
+
+    if (! banding || e.mods.isPopupMenu())
+        return;
+
+    bandRect = juce::Rectangle<float>::leftTopRightBottom (
+        juce::jmin (bandStart.x, e.position.x), juce::jmin (bandStart.y, e.position.y),
+        juce::jmax (bandStart.x, e.position.x), juce::jmax (bandStart.y, e.position.y));
+
+    std::set<int> inside;
+    for (auto& comp : nodeComps)
+        if (bandRect.intersects (comp->getBoundsInParent().toFloat()))
+            inside.insert (comp->getNodeId());
+    selection.setMultiple (std::move (inside));
+
+    repaint();
+}
+
+void GraphCanvas::mouseUp (const juce::MouseEvent&)
+{
+    if (! banding)
+        return;
+
+    // A click (no meaningful band) on empty canvas clears the selection.
+    if (bandRect.getWidth() < 4.0f && bandRect.getHeight() < 4.0f)
+        selection.select (-1);
+
+    banding = false;
+    bandRect = {};
+    repaint();
 }
 
 void GraphCanvas::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
@@ -421,15 +470,47 @@ void GraphCanvas::showDisconnectMenu (Socket& socket)
 
 // --- node drag bookkeeping ---------------------------------------------------
 
-void GraphCanvas::nodeMoved (NodeComponent&)
+void GraphCanvas::nodeDragStarted (NodeComponent& comp)
 {
-    repaint();   // cables track the moving node
+    draggedNodeStart = comp.getPosition();
+    groupDragStarts.clear();
+    if (selection.isGroup() && selection.getGroup().count (comp.getNodeId()) > 0)
+        for (auto id : selection.getGroup())
+            if (auto* other = findNodeComponent (id))
+                groupDragStarts[id] = other->getPosition();
+}
+
+void GraphCanvas::nodeMoved (NodeComponent& comp)
+{
+    // Dragging a grouped node carries the rest of the group with it.
+    if (! groupDragStarts.empty())
+    {
+        auto delta = comp.getPosition() - draggedNodeStart;
+        for (auto& [id, start] : groupDragStarts)
+            if (id != comp.getNodeId())
+                if (auto* other = findNodeComponent (id))
+                    other->setTopLeftPosition (start + delta);
+    }
+    repaint();   // cables track the moving nodes
 }
 
 void GraphCanvas::nodeDragFinished (NodeComponent& comp)
 {
-    auto content = comp.getPosition().toFloat() - panOffset / zoom;
-    model.setNodePosition (comp.getNodeId(), content.x, content.y);
+    auto commit = [this] (NodeComponent& c)
+    {
+        auto content = c.getPosition().toFloat() - panOffset / zoom;
+        model.setNodePosition (c.getNodeId(), content.x, content.y);
+    };
+
+    if (! groupDragStarts.empty())
+    {
+        for (auto& [id, start] : groupDragStarts)
+            if (auto* other = findNodeComponent (id))
+                commit (*other);
+        groupDragStarts.clear();
+        return;
+    }
+    commit (comp);
 }
 
 void GraphCanvas::nodePositionChangedInModel (NodeComponent& comp)

@@ -2,6 +2,7 @@
 
 #include "NodeComponent.h"
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <map>
 
 namespace melo
 {
@@ -27,6 +28,7 @@ public:
 
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
 
     // Cable gesture, driven by Socket mouse events.
@@ -35,7 +37,8 @@ public:
     void endCableDrag (const juce::MouseEvent&);
     void showDisconnectMenu (Socket&);
 
-    // Node drag bookkeeping.
+    // Node drag bookkeeping. A drag on a grouped node moves the whole group.
+    void nodeDragStarted (NodeComponent&);
     void nodeMoved (NodeComponent&);
     void nodeDragFinished (NodeComponent&);
     void nodePositionChangedInModel (NodeComponent&);
@@ -74,6 +77,15 @@ private:
     juce::Point<float> panOffset { 0.0f, 0.0f };
     juce::Point<float> panDragStart;
     bool centredOnce = false;
+
+    // Rubber-band selection (left-drag on empty canvas).
+    bool banding = false;
+    juce::Point<float> bandStart;
+    juce::Rectangle<float> bandRect;
+
+    // Start positions for a group drag, keyed by node id.
+    std::map<int, juce::Point<int>> groupDragStarts;
+    juce::Point<int> draggedNodeStart;
 
     // In-progress cable.
     Socket* dragSourceSocket = nullptr;
