@@ -83,6 +83,10 @@ namespace ids
     inline const juce::Identifier pointV    { "v" };
     inline const juce::Identifier tension   { "tension" };
 
+    // Editing grid for curve points (per curve node); 0 = no snap on that axis.
+    inline const juce::Identifier gridX     { "gridX" };
+    inline const juce::Identifier gridY     { "gridY" };
+
     // Hosted third-party plugin nodes.
     inline const juce::Identifier pluginPath  { "pluginPath" };
     inline const juce::Identifier pluginName  { "pluginName" };

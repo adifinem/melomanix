@@ -23,7 +23,15 @@ public:
         : processor (p), selection (sel)
     {
         selection.addChangeListener (this);
+        addChildComponent (gridButton);
+        gridButton.onClick = [this] { showGridMenu(); };
+        updateGridButton();
         startTimerHz (30);
+    }
+
+    void resized() override
+    {
+        gridButton.setBounds (getWidth() - 86, 4, 78, 18);
     }
 
     ~TimelinePane() override
@@ -115,6 +123,7 @@ public:
         {
             auto t = juce::jlimit (0.0f, 1.0f, (e.position.x - area.getX()) / area.getWidth());
             auto v = juce::jlimit (0.0f, 1.0f, (area.getBottom() - e.position.y) / area.getHeight());
+            snapToGrid (draggingPoint.getParent(), t, v);
             draggingPoint.setProperty (ids::pointT, t, nullptr);
             draggingPoint.setProperty (ids::pointV, v, nullptr);
         }
@@ -139,17 +148,78 @@ public:
             return;
 
         auto area = laneBounds().toFloat();
+        auto t = juce::jlimit (0.0f, 1.0f, (e.position.x - area.getX()) / area.getWidth());
+        auto v = juce::jlimit (0.0f, 1.0f, (area.getBottom() - e.position.y) / area.getHeight());
+        snapToGrid (node, t, v);
+
         juce::ValueTree point (ids::point);
-        point.setProperty (ids::pointT,
-                           juce::jlimit (0.0f, 1.0f, (e.position.x - area.getX()) / area.getWidth()), nullptr);
-        point.setProperty (ids::pointV,
-                           juce::jlimit (0.0f, 1.0f, (area.getBottom() - e.position.y) / area.getHeight()), nullptr);
+        point.setProperty (ids::pointT, t, nullptr);
+        point.setProperty (ids::pointV, v, nullptr);
         point.setProperty (ids::tension, 0.0f, nullptr);
         node.addChild (point, -1, nullptr);
     }
 
 private:
     static constexpr double lfoWindowSeconds = 4.0;
+
+    // --- point-editing grid (per curve node, 0 = free axis) ---------------
+
+    static constexpr std::pair<int, int> gridPresets[] = {
+        { 0, 0 }, { 2, 2 }, { 4, 4 }, { 6, 4 }, { 4, 6 }, { 8, 8 }, { 16, 8 }
+    };
+
+    static juce::String gridLabel (int gx, int gy)
+    {
+        return gx <= 0 ? juce::String ("grid: off")
+                       : "grid: " + juce::String (gx)
+                             + juce::String (juce::CharPointer_UTF8 ("\xc3\x97")) + juce::String (gy);
+    }
+
+    // Snaps t/v to the node's grid; CTRL bypasses (matches the length slider).
+    static void snapToGrid (const juce::ValueTree& node, float& t, float& v)
+    {
+        if (! node.isValid() || juce::ModifierKeys::getCurrentModifiers().isCtrlDown())
+            return;
+        int gx = node.getProperty (ids::gridX, 0), gy = node.getProperty (ids::gridY, 0);
+        if (gx > 0) t = std::round (t * (float) gx) / (float) gx;
+        if (gy > 0) v = std::round (v * (float) gy) / (float) gy;
+    }
+
+    void showGridMenu()
+    {
+        auto node = selectedCurveNode();
+        if (! node.isValid())
+            return;
+
+        int curX = node.getProperty (ids::gridX, 0), curY = node.getProperty (ids::gridY, 0);
+        juce::PopupMenu menu;
+        for (int i = 0; i < (int) std::size (gridPresets); ++i)
+        {
+            auto [gx, gy] = gridPresets[i];
+            menu.addItem (i + 1, gridLabel (gx, gy), true, gx == curX && gy == curY);
+        }
+
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&gridButton),
+                            [this, node] (int result) mutable
+                            {
+                                if (result <= 0)
+                                    return;
+                                auto [gx, gy] = gridPresets[result - 1];
+                                node.setProperty (ids::gridX, gx, nullptr);
+                                node.setProperty (ids::gridY, gy, nullptr);
+                                updateGridButton();
+                                repaint();
+                            });
+    }
+
+    void updateGridButton()
+    {
+        auto node = selectedCurveNode();
+        gridButton.setVisible (node.isValid());
+        if (node.isValid())
+            gridButton.setButtonText (gridLabel (node.getProperty (ids::gridX, 0),
+                                                 node.getProperty (ids::gridY, 0)));
+    }
 
     juce::Rectangle<int> laneBounds() const
     {
@@ -161,7 +231,7 @@ private:
     juce::String titleTextFor (NodeType type, const juce::String& title) const
     {
         if (type == NodeType::curve)
-            return title + "   —   drag points · double-click to add · right-click to delete · drag between points to bend";
+            return title + "   —   drag points · double-click to add · right-click to delete · drag between points to bend · CTRL = no snap";
         return title;
     }
 
@@ -275,6 +345,20 @@ private:
 
         drawLaneFrame (g, area, juce::jlimit (1, 32, (int) std::lround (lengthBeats)));
 
+        // Editing grid on top of the beat frame, slightly brighter so the
+        // snap targets read against it.
+        int gx = node.getProperty (ids::gridX, 0), gy = node.getProperty (ids::gridY, 0);
+        if (gx > 0)
+        {
+            g.setColour (theme::controlSignal.withAlpha (0.18f));
+            for (int i = 0; i <= gx; ++i)
+                g.drawVerticalLine ((int) (area.getX() + area.getWidth() * (float) i / (float) gx),
+                                    area.getY(), area.getBottom());
+            for (int j = 0; j <= gy; ++j)
+                g.drawHorizontalLine ((int) (area.getY() + area.getHeight() * (float) j / (float) gy),
+                                      area.getX(), area.getRight());
+        }
+
         juce::Path path;
         for (float x = 0.0f; x <= area.getWidth(); x += 1.0f)
         {
@@ -343,10 +427,16 @@ private:
     }
 
     void timerCallback() override { repaint(); }
-    void changeListenerCallback (juce::ChangeBroadcaster*) override { repaint(); }
+
+    void changeListenerCallback (juce::ChangeBroadcaster*) override
+    {
+        updateGridButton();
+        repaint();
+    }
 
     MelomanixProcessor& processor;
     SelectionModel& selection;
+    juce::TextButton gridButton;
 
     juce::ValueTree draggingPoint;
     juce::ValueTree tensionSegmentStart;
