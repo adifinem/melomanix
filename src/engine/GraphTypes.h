@@ -72,7 +72,8 @@ namespace ids
     inline const juce::Identifier srcNode    { "src" };
     inline const juce::Identifier dstNode    { "dst" };
     inline const juce::Identifier dstParam   { "dstParam" };  // set => mod connection, absent => audio
-    inline const juce::Identifier depth      { "depth" };
+    inline const juce::Identifier depth      { "depth" };     // -1..1, negative inverts
+    inline const juce::Identifier offset     { "offset" };    // -1..1 shift of the mod centre
     inline const juce::Identifier nextNodeId { "nextNodeId" };
     inline const juce::Identifier macroIndex { "macroIndex" };
 

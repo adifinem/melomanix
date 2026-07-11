@@ -4,10 +4,12 @@
 #include "ui/GraphCanvas.h"
 #include "ui/TimelinePane.h"
 #include "ui/MacroStrip.h"
+#include "ui/MatrixPane.h"
 
-// Fixed panes per the spec: macro strip (top), node graph (centre, largest),
-// timeline (bottom). Nothing floats. The editor is the drag-and-drop
-// container so macro grips can drop onto node parameter rows.
+// Fixed panes per the spec: macro strip (top), matrix (left, collapsible),
+// node graph (centre, largest), timeline (bottom). Nothing floats. The
+// editor is the drag-and-drop container so macro grips can drop onto node
+// parameter rows.
 class MelomanixEditor : public juce::AudioProcessorEditor,
                         public juce::DragAndDropContainer
 {
@@ -22,6 +24,7 @@ private:
 
     melo::SelectionModel selection;
     melo::MacroStrip macroStrip;
+    melo::MatrixPane matrixPane;
     melo::GraphCanvas graphCanvas;
     melo::TimelinePane timelinePane;
 

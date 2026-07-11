@@ -228,6 +228,63 @@ int main()
                 "IO nodes cannot be duplicated");
     }
 
+    // --- Per-connection remap: depth inversion and offset ----------------
+    {
+        GraphModel remapModel;
+        auto rIn = -1, rOut = -1;
+        for (auto c : remapModel.state())
+            if (c.hasType (ids::node))
+            {
+                auto t = c.getProperty (ids::type).toString();
+                if (t == "audioIn")  rIn  = c.getProperty (ids::nodeId);
+                if (t == "audioOut") rOut = c.getProperty (ids::nodeId);
+            }
+        juce::ignoreUnused (rIn, rOut);
+
+        auto rDelay = remapModel.addNode (NodeType::delay, 0.0f, 0.0f);
+        auto rMacro = remapModel.addMacroNode (0, 0.0f, 100.0f);
+        expect (remapModel.addModConnection (rMacro, rDelay, "mix"), "remap: macro -> delay.mix");
+
+        // Point the connection at full inversion with a centre offset.
+        for (auto c : remapModel.state())
+            if (c.hasType (ids::conn) && c.hasProperty (ids::dstParam))
+            {
+                c.setProperty (ids::depth, -0.5f, nullptr);
+                c.setProperty (ids::offset, 0.25f, nullptr);
+            }
+
+        std::atomic<float> remapMacro { 1.0f };   // bipolar(1) = +1
+        std::vector<std::atomic<float>*> remapMacros { &remapMacro };
+        remapModel.setParamValue (rDelay, "mix", 0.5f);   // mix range is 0..1
+
+        auto remapCompiled = compileGraph (remapModel.state(), remapMacros);
+        GraphEngine remapEngine;
+        remapEngine.prepare (48000.0, 256);
+        remapEngine.setGraph (remapCompiled);
+
+        juce::AudioBuffer<float> remapBuffer (2, 256);
+        ProcessContext remapCtx;
+        remapCtx.sampleRate = 48000.0;
+        remapCtx.maxBlockSize = 256;
+        remapCtx.numSamples = 256;
+        for (int block = 0; block < 400; ++block)   // let smoothing settle
+        {
+            remapEngine.process (remapBuffer, remapCtx);
+            remapBuffer.clear();
+        }
+
+        EngineNode* compiledDelay = nullptr;
+        for (auto& n : remapCompiled->nodes)
+            if (n->modelNodeId == rDelay)
+                compiledDelay = n.get();
+
+        // base 0.5 + offset 0.25 + depth -0.5 * (+1) = 0.25
+        auto mixIndex = compiledDelay->indexOfParam ("mix");
+        auto effective = compiledDelay->params[(size_t) mixIndex].current();
+        expect (std::abs (effective - 0.25f) < 0.02f,
+                "connection depth inverts and offset shifts the modulation");
+    }
+
     // --- Serialisation round-trip ---------------------------------------
     auto xml = model.state().toXmlString();
     GraphModel restored;

@@ -19,14 +19,16 @@ struct ProcessContext
 
 // A parameter slot on a compiled node. `baseNorm` is the knob position;
 // a mod connection offsets it bipolarly in the normalised domain:
-//     effective = clamp01(base + depth * (control*2 - 1))
+//     effective = clamp01(base + offset + depth * (control*2 - 1))
 // then denormalised and smoothed before use. Controllers emit in [0,1].
+// Negative depth inverts the modulation; offset shifts its centre.
 struct ParamState
 {
     ParamSpec spec { "", "", 0.0f, 1.0f, 0.0f };
     float baseNorm = 0.0f;
     int   modSourceIndex = -1;   // index into CompiledGraph::nodes, -1 = unmodulated
     float modDepth = 0.0f;
+    float modOffset = 0.0f;
     juce::SmoothedValue<float> smoothed;
 
     float current() const { return smoothed.getCurrentValue(); }
@@ -72,7 +74,8 @@ public:
             auto norm = p.baseNorm;
             if (p.modSourceIndex >= 0)
                 norm = juce::jlimit (0.0f, 1.0f,
-                                     norm + p.modDepth * (nodes[(size_t) p.modSourceIndex]->lastOutput * 2.0f - 1.0f));
+                                     norm + p.modOffset
+                                         + p.modDepth * (nodes[(size_t) p.modSourceIndex]->lastOutput * 2.0f - 1.0f));
             p.smoothed.setTargetValue (p.spec.denormalise (norm));
             p.smoothed.getNextValue();
         }

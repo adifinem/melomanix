@@ -190,6 +190,7 @@ std::shared_ptr<CompiledGraph> compileGraph (const juce::ValueTree& graphTree,
             auto& param = compiled->nodes[(size_t) dst]->params[(size_t) paramIndex];
             param.modSourceIndex = src;
             param.modDepth = child.getProperty (ids::depth, 1.0f);
+            param.modOffset = child.getProperty (ids::offset, 0.0f);
         }
         else
         {
