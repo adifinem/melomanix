@@ -46,8 +46,8 @@ juce::StringArray HostedPluginRegistry::syncWithModel (juce::ValueTree& graphTre
         {
             // The commonest cause is a plugin built for another OS (e.g. a
             // Windows-only .vst3 on Linux) — say so instead of a bare "no".
-            fail (child, "Couldn't load — not a " + juce::String (JUCE_LINUX ? "Linux" : "this-platform")
-                             + " VST3? (" + path + ")");
+            fail (child, "Couldn't load — not a VST3 for this OS ("
+                             + juce::SystemStats::getOperatingSystemName() + ")? " + path);
             continue;
         }
 
