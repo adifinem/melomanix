@@ -1,6 +1,7 @@
 #pragma once
 
 #include "NodeComponent.h"
+#include <juce_audio_processors/juce_audio_processors.h>
 
 namespace melo
 {
@@ -46,6 +47,7 @@ private:
 
     void rebuild();
     void showAddNodeMenu (juce::Point<int> canvasPos);
+    void showInstalledPluginsMenu (juce::Point<int> canvasPos, juce::Point<float> contentPos);
     void chooseAndLoadPlugin (juce::Point<float> contentPos);
     NodeComponent* findNodeComponent (int nodeId) const;
     juce::Point<float> contentPosFor (const juce::ValueTree& node) const;
@@ -61,6 +63,8 @@ private:
     std::function<void (int)> openHostedEditorFn;
     HostedInstanceLookup hostedLookup;
     std::unique_ptr<juce::FileChooser> pluginChooser;
+    juce::KnownPluginList installedPlugins;
+    bool scannedPlugins = false;
     juce::ValueTree observedTree;
 
     std::vector<std::unique_ptr<NodeComponent>> nodeComps;

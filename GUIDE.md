@@ -23,6 +23,24 @@ Color code everywhere: **orange = audio**, **teal = control signals**.
 
 ---
 
+## New in v0.3.1 — plugin loading that actually finds your plugins
+
+v0.3.0's file dialog was broken on Windows (it showed only folders — you
+couldn't see any `.vst3` files). Fixed, and improved:
+
+- Right-click the canvas → **Add installed plugin...** now *scans your
+  standard VST3 folders* and lists every plugin it finds **by name** — just
+  click one. No file dialog at all. (First open takes a few seconds while
+  it scans; there's a Rescan item at the top.)
+- **Load VST3 from file...** still exists for plugins in unusual places,
+  and now starts in your VST3 folder and correctly shows files.
+- If a plugin fails to load, the node now **shows the error on itself in
+  red** instead of failing silently — including the common case of picking
+  a plugin built for the wrong operating system (a Windows-only `.vst3`
+  can't load on Linux, and vice versa).
+
+---
+
 ## New in v0.3 — host other plugins inside the graph
 
 Melomanix can now load third-party VST3 plugins as nodes and modulate

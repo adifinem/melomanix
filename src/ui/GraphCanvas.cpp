@@ -1,4 +1,5 @@
 #include "GraphCanvas.h"
+#include "../engine/HostedPlugin.h"
 
 namespace melo
 {
@@ -194,28 +195,91 @@ void GraphCanvas::showAddNodeMenu (juce::Point<int> canvasPos)
     menu.addItem (3, "EQ");
     menu.addItem (4, "Delay");
     menu.addSeparator();
-    menu.addItem (5, "Load VST3 plugin...");
+    menu.addItem (5, "Add installed plugin...");
+    menu.addItem (6, "Load VST3 from file...");
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
-                        [this, contentPos] (int result)
+                        [this, canvasPos, contentPos] (int result)
                         {
                             if (result == 1) model.addNode (NodeType::lfo,   contentPos.x, contentPos.y);
                             if (result == 2) model.addNode (NodeType::curve, contentPos.x, contentPos.y);
                             if (result == 3) model.addNode (NodeType::eq,    contentPos.x, contentPos.y);
                             if (result == 4) model.addNode (NodeType::delay, contentPos.x, contentPos.y);
-                            if (result == 5) chooseAndLoadPlugin (contentPos);
+                            if (result == 5) showInstalledPluginsMenu (canvasPos, contentPos);
+                            if (result == 6) chooseAndLoadPlugin (contentPos);
+                        });
+}
+
+void GraphCanvas::showInstalledPluginsMenu (juce::Point<int> canvasPos, juce::Point<float> contentPos)
+{
+    if (! scannedPlugins)
+    {
+        setMouseCursor (juce::MouseCursor::WaitCursor);
+        scanInstalledVST3s (installedPlugins);
+        setMouseCursor (juce::MouseCursor::NormalCursor);
+        scannedPlugins = true;
+    }
+
+    auto types = installedPlugins.getTypes();
+
+    juce::PopupMenu menu;
+    if (types.isEmpty())
+    {
+        menu.addSectionHeader ("No VST3 plugins found in the standard folders");
+        menu.addItem (1, "Browse for a file instead...");
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                            [this, contentPos] (int result)
+                            {
+                                if (result == 1)
+                                    chooseAndLoadPlugin (contentPos);
+                            });
+        return;
+    }
+
+    menu.addSectionHeader ("Installed VST3 plugins");
+    menu.addItem (1, "Rescan folders");
+    menu.addSeparator();
+    for (int i = 0; i < types.size(); ++i)
+        menu.addItem (100 + i, types[i].name + "  (" + types[i].manufacturerName + ")");
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                        [this, canvasPos, contentPos, types] (int result)
+                        {
+                            if (result == 1)
+                            {
+                                scannedPlugins = false;
+                                installedPlugins.clear();
+                                showInstalledPluginsMenu (canvasPos, contentPos);
+                            }
+                            else if (result >= 100)
+                            {
+                                auto& description = types.getReference (result - 100);
+                                model.addHostedNode (description.fileOrIdentifier, description.name,
+                                                     contentPos.x, contentPos.y);
+                            }
                         });
 }
 
 void GraphCanvas::chooseAndLoadPlugin (juce::Point<float> contentPos)
 {
-    auto defaultDir = juce::File ("~/.vst3").exists() ? juce::File ("~/.vst3")
-                                                      : juce::File::getSpecialLocation (juce::File::userHomeDirectory);
+    // Fall back to the first standard VST3 location that exists.
+    juce::File defaultDir;
+    auto searchPaths = juce::VST3PluginFormat().getDefaultLocationsToSearch();
+    for (int i = 0; i < searchPaths.getNumPaths(); ++i)
+        if (searchPaths[i].isDirectory())
+        {
+            defaultDir = searchPaths[i];
+            break;
+        }
+    if (defaultDir == juce::File())
+        defaultDir = juce::File::getSpecialLocation (juce::File::userHomeDirectory);
 
+    // Files-only: mixing files+directories makes the native Windows dialog
+    // degrade into a folder picker where .vst3 files are invisible.
+    // Folder-bundle plugins are covered by the installed-plugins scan.
     pluginChooser = std::make_unique<juce::FileChooser> ("Load a VST3 plugin", defaultDir, "*.vst3");
     pluginChooser->launchAsync (juce::FileBrowserComponent::openMode
-                                    | juce::FileBrowserComponent::canSelectFiles
-                                    | juce::FileBrowserComponent::canSelectDirectories,
+                                    | juce::FileBrowserComponent::canSelectFiles,
                                 [this, contentPos] (const juce::FileChooser& chooser)
                                 {
                                     auto file = chooser.getResult();

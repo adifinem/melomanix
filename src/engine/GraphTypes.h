@@ -87,6 +87,7 @@ namespace ids
     inline const juce::Identifier pluginPath  { "pluginPath" };
     inline const juce::Identifier pluginName  { "pluginName" };
     inline const juce::Identifier pluginState { "pluginState" };   // base64
+    inline const juce::Identifier pluginError { "pluginError" };   // set when load failed
 
     // A hosted parameter exposed as a modulation socket. Children of the
     // hosted NODE; the socket's paramId is "p<index>".

@@ -72,7 +72,10 @@ NodeComponent::NodeComponent (GraphModel& m, juce::ValueTree nodeTree, Selection
     if (kindOf (type) == NodeKind::controller)
         addAndMakeVisible (*(ctrlOutSocket = std::make_unique<Socket> (SocketKind::ctrlOut, nodeId)));
 
-    setSize (width, headerHeight + (int) rows.size() * rowHeight + 8);
+    auto bodyHeight = (int) rows.size() * rowHeight + 8;
+    if (type == NodeType::hosted && rows.empty())
+        bodyHeight = 44;   // room for the hint or a load-error message
+    setSize (width, headerHeight + bodyHeight);
 }
 
 NodeComponent::~NodeComponent()
@@ -189,11 +192,21 @@ void NodeComponent::paint (juce::Graphics& g)
 
     if (type == NodeType::hosted && rows.empty())
     {
-        g.setColour (theme::textDim);
-        g.setFont (juce::FontOptions (10.0f));
-        g.drawText ("double-click: GUI · right-click: params",
-                    getLocalBounds().withTrimmedTop (headerHeight),
-                    juce::Justification::centred);
+        auto loadError = tree.getProperty (ids::pluginError).toString();
+        auto body = getLocalBounds().withTrimmedTop (headerHeight).reduced (6, 2);
+        if (loadError.isNotEmpty())
+        {
+            g.setColour (juce::Colour (0xffd06060));
+            g.setFont (juce::FontOptions (10.0f));
+            g.drawFittedText (loadError, body, juce::Justification::centred, 3);
+        }
+        else
+        {
+            g.setColour (theme::textDim);
+            g.setFont (juce::FontOptions (10.0f));
+            g.drawText ("double-click: GUI · right-click: params", body,
+                        juce::Justification::centred);
+        }
     }
 
     if (highlightedRow >= 0)
@@ -344,6 +357,12 @@ int NodeComponent::paramRowAt (int y) const
 
 void NodeComponent::valueTreePropertyChanged (juce::ValueTree& changed, const juce::Identifier& property)
 {
+    if (changed == tree && property == ids::pluginError)
+    {
+        repaint();
+        return;
+    }
+
     if (changed == tree && (property == ids::posX || property == ids::posY))
     {
         if (auto* canvas = findParentComponentOfClass<GraphCanvas>())

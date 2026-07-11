@@ -10,10 +10,16 @@ HostedPluginRegistry::HostedPluginRegistry()
 
 HostedPluginRegistry::~HostedPluginRegistry() = default;
 
-juce::StringArray HostedPluginRegistry::syncWithModel (const juce::ValueTree& graphTree)
+juce::StringArray HostedPluginRegistry::syncWithModel (juce::ValueTree& graphTree)
 {
     juce::StringArray errors;
     std::set<int> liveNodeIds;
+
+    auto fail = [&errors] (juce::ValueTree node, const juce::String& message)
+    {
+        node.setProperty (ids::pluginError, message, nullptr);
+        errors.add (message);
+    };
 
     for (auto child : graphTree)
     {
@@ -26,6 +32,8 @@ juce::StringArray HostedPluginRegistry::syncWithModel (const juce::ValueTree& gr
 
         if (instances.count (nodeId) != 0)
             continue;
+        if (child.hasProperty (ids::pluginError))
+            continue;   // already failed; don't retry every recompile
 
         auto path = child.getProperty (ids::pluginPath).toString();
         juce::OwnedArray<juce::PluginDescription> found;
@@ -36,7 +44,10 @@ juce::StringArray HostedPluginRegistry::syncWithModel (const juce::ValueTree& gr
 
         if (found.isEmpty())
         {
-            errors.add ("No loadable plugin in: " + path);
+            // The commonest cause is a plugin built for another OS (e.g. a
+            // Windows-only .vst3 on Linux) — say so instead of a bare "no".
+            fail (child, "Couldn't load — not a " + juce::String (JUCE_LINUX ? "Linux" : "this-platform")
+                             + " VST3? (" + path + ")");
             continue;
         }
 
@@ -44,9 +55,11 @@ juce::StringArray HostedPluginRegistry::syncWithModel (const juce::ValueTree& gr
         auto instance = formatManager.createPluginInstance (*found[0], sampleRate, maxBlockSize, error);
         if (instance == nullptr)
         {
-            errors.add (found[0]->name + ": " + error);
+            fail (child, found[0]->name + ": " + error);
             continue;
         }
+
+        child.removeProperty (ids::pluginError, nullptr);
 
         instance->enableAllBuses();
         instance->prepareToPlay (sampleRate, maxBlockSize);
@@ -100,6 +113,24 @@ void HostedPluginRegistry::captureStates (juce::ValueTree& graphTree)
         juce::MemoryBlock block;
         it->second.instance->getStateInformation (block);
         child.setProperty (ids::pluginState, block.toBase64Encoding(), nullptr);
+    }
+}
+
+void scanInstalledVST3s (juce::KnownPluginList& list)
+{
+    juce::VST3PluginFormat format;
+    auto searchPaths = format.getDefaultLocationsToSearch();
+
+    for (auto& fileOrId : format.searchPathsForPlugins (searchPaths, true, true))
+    {
+        // Skip anything already known so rescans are cheap.
+        if (list.getTypeForFile (fileOrId) != nullptr)
+            continue;
+
+        juce::OwnedArray<juce::PluginDescription> found;
+        format.findAllTypesForFile (found, fileOrId);
+        for (auto* description : found)
+            list.addType (*description);
     }
 }
 

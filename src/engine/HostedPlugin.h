@@ -19,8 +19,9 @@ public:
 
     // Scans the model tree: instantiates plugins for hosted nodes that have
     // none yet (restoring saved state), drops instances whose nodes are gone.
-    // Message thread only. Returns error text for any node that failed.
-    juce::StringArray syncWithModel (const juce::ValueTree& graphTree);
+    // Message thread only. Failures are written onto the node's pluginError
+    // property so the UI can show them; also returned for logging.
+    juce::StringArray syncWithModel (juce::ValueTree& graphTree);
 
     // Called from prepareToPlay (audio not running).
     void prepare (double sampleRate, int maxBlockSize);
@@ -47,6 +48,10 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HostedPluginRegistry)
 };
+
+// Scans the platform's standard VST3 locations (and ~/.vst3 etc) into the
+// list. Blocking; first run can take a few seconds with many plugins.
+void scanInstalledVST3s (juce::KnownPluginList&);
 
 // Engine node that hands its buffer to a hosted plugin instance. The raw
 // pointer is valid for the compiled graph's lifetime because the registry
