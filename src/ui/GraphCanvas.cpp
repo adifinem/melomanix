@@ -308,8 +308,11 @@ void GraphCanvas::updateCableDrag (const juce::MouseEvent& e)
     if (dragSourceSocket == nullptr)
         return;
 
+    // dragCableEnd lives in the same space as socketCentreInParent (node
+    // logical coords, drawn at *zoom), so only unapply the zoom here —
+    // subtracting panOffset too made the cable miss the mouse when panned.
     auto canvasPos = e.getEventRelativeTo (this).position;
-    dragCableEnd = (canvasPos - panOffset) / zoom;
+    dragCableEnd = canvasPos / zoom;
     repaint();
 }
 
