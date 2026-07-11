@@ -47,13 +47,18 @@ public:
     double getPlayheadBeats() const { return lastPlayheadBeats.load(); }
     double getBpm() const { return lastBpm.load(); }
 
+    // Display only: a controller's latest block output for cable glow.
+    float getControllerValue (int nodeId) const { return engine.controllerValueFor (nodeId); }
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     void valueTreePropertyChanged (juce::ValueTree&, const juce::Identifier& property) override
     {
-        // Node positions are cosmetic; don't recompile the audio graph for them.
-        if (property != melo::ids::posX && property != melo::ids::posY)
+        // Positions and appearance are cosmetic; don't recompile for them.
+        if (property != melo::ids::posX && property != melo::ids::posY
+            && property != melo::ids::palette && property != melo::ids::cableGlow
+            && property != melo::ids::gridX && property != melo::ids::gridY)
             triggerAsyncUpdate();
     }
     void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree&) override { triggerAsyncUpdate(); }

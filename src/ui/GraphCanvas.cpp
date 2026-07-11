@@ -6,15 +6,23 @@ namespace melo
 {
 
 GraphCanvas::GraphCanvas (GraphModel& m, SelectionModel& sel, std::function<double()> bpmProvider,
-                          std::function<void (int)> openHostedFn, HostedInstanceLookup hostedLookupFn)
+                          std::function<void (int)> openHostedFn, HostedInstanceLookup hostedLookupFn,
+                          std::function<float (int)> controllerValueProvider)
     : model (m), selection (sel), getBpm (std::move (bpmProvider)),
       openHostedEditorFn (std::move (openHostedFn)),
-      hostedLookup (std::move (hostedLookupFn))
+      hostedLookup (std::move (hostedLookupFn)),
+      controllerValue (std::move (controllerValueProvider))
 {
     observedTree = model.state();
     observedTree.addListener (this);
-    startTimer (500);   // watches for wholesale tree replacement (state load)
+    applyPaletteFromModel();
+    startTimer (glowEnabled() ? 33 : 500);   // fast only while cables glow
     rebuild();
+}
+
+void GraphCanvas::applyPaletteFromModel()
+{
+    theme::applyPalette (model.state().getProperty (ids::palette, "Slate").toString());
 }
 
 GraphCanvas::~GraphCanvas()
@@ -140,9 +148,19 @@ void GraphCanvas::drawCables (juce::Graphics& g)
                                                        child.getProperty (ids::dstParam).toString())
                       : dstComp->socketCentreInParent (SocketKind::audioIn);
 
-        drawCablePath (g, from * zoom, to * zoom,
-                       (isMod ? theme::controlSignal : theme::audioSignal).withAlpha (0.85f),
-                       (isMod ? 1.6f : 2.4f) * zoom);
+        auto colour = (isMod ? theme::controlSignal : theme::audioSignal).withAlpha (0.85f);
+        auto thickness = (isMod ? 1.6f : 2.4f) * zoom;
+
+        // Optional: control cables light up with the live controller value.
+        if (isMod && glowEnabled() && controllerValue != nullptr)
+        {
+            auto value = juce::jlimit (0.0f, 1.0f,
+                                       controllerValue ((int) child.getProperty (ids::srcNode)));
+            colour = theme::controlSignal.brighter (value * 1.2f).withAlpha (0.55f + 0.45f * value);
+            thickness = (1.2f + 2.2f * value) * zoom;
+        }
+
+        drawCablePath (g, from * zoom, to * zoom, colour, thickness);
     }
 
     if (dragSourceSocket != nullptr)
@@ -247,6 +265,15 @@ void GraphCanvas::showAddNodeMenu (juce::Point<int> canvasPos)
     menu.addItem (5, "Add installed plugin...");
     menu.addItem (6, "Load VST3 from file...");
 
+    menu.addSeparator();
+    juce::PopupMenu appearance;
+    for (int i = 0; i < (int) theme::palettes().size(); ++i)
+        appearance.addItem (200 + i, theme::palettes()[(size_t) i].name, true,
+                            theme::currentPaletteName == theme::palettes()[(size_t) i].name);
+    appearance.addSeparator();
+    appearance.addItem (300, "Cable glow (live values)", true, glowEnabled());
+    menu.addSubMenu ("Appearance", appearance);
+
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
                         [this, canvasPos, contentPos] (int result)
                         {
@@ -256,6 +283,21 @@ void GraphCanvas::showAddNodeMenu (juce::Point<int> canvasPos)
                             if (result == 4) model.addNode (NodeType::delay, contentPos.x, contentPos.y);
                             if (result == 5) showInstalledPluginsMenu (canvasPos, contentPos);
                             if (result == 6) chooseAndLoadPlugin (contentPos);
+
+                            if (result >= 200 && result < 300)
+                            {
+                                auto& chosen = theme::palettes()[(size_t) (result - 200)];
+                                model.state().setProperty (ids::palette, chosen.name, nullptr);
+                                theme::applyPalette (chosen.name);
+                                if (auto* top = getTopLevelComponent())
+                                    top->repaint();
+                            }
+                            if (result == 300)
+                            {
+                                model.state().setProperty (ids::cableGlow, ! glowEnabled(), nullptr);
+                                startTimer (glowEnabled() ? 33 : 500);
+                                repaint();
+                            }
                         });
 }
 
@@ -546,8 +588,16 @@ void GraphCanvas::timerCallback()
         observedTree.removeListener (this);
         observedTree = model.state();
         observedTree.addListener (this);
+        applyPaletteFromModel();   // a loaded project brings its palette
+        if (auto* top = getTopLevelComponent())
+            top->repaint();
         rebuild();
     }
+
+    auto glow = glowEnabled();
+    startTimer (glow ? 33 : 500);
+    if (glow)
+        repaint();   // cables track live controller values
 }
 
 } // namespace melo

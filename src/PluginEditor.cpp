@@ -7,7 +7,8 @@ MelomanixEditor::MelomanixEditor (MelomanixProcessor& p)
       matrixPane (p.graphModel),
       graphCanvas (p.graphModel, selection, [&p] { return p.getBpm(); },
                    [&p] (int nodeId) { p.hostedPlugins.showEditorWindow (nodeId); },
-                   [&p] (int nodeId) { return p.hostedPlugins.instanceFor (nodeId); }),
+                   [&p] (int nodeId) { return p.hostedPlugins.instanceFor (nodeId); },
+                   [&p] (int nodeId) { return p.getControllerValue (nodeId); }),
       timelinePane (p, selection)
 {
     addAndMakeVisible (macroStrip);

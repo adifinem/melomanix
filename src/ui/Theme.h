@@ -5,18 +5,69 @@
 
 namespace melo::theme
 {
-    inline const juce::Colour background     { 0xff1e2126 };
-    inline const juce::Colour panel          { 0xff262a31 };
-    inline const juce::Colour nodeBody       { 0xff2e333c };
-    inline const juce::Colour nodeSelected   { 0xff4a90d9 };
-    inline const juce::Colour headerDsp      { 0xff3d5a80 };
-    inline const juce::Colour headerCtrl     { 0xff5c8a4a };
-    inline const juce::Colour headerIO       { 0xff55585f };
-    inline const juce::Colour audioSignal    { 0xffe8a04c };   // audio cables/sockets: warm
-    inline const juce::Colour controlSignal  { 0xff6ecfcf };   // control cables/sockets: cool
-    inline const juce::Colour text           { 0xffd8dade };
-    inline const juce::Colour textDim        { 0xff8a8f98 };
-    inline const juce::Colour playhead       { 0xffe86060 };
+    // The active palette. Mutable so applyPalette() can retarget every
+    // theme::x call site at once; UI (message) thread only.
+    inline juce::Colour background     { 0xff1e2126 };
+    inline juce::Colour panel          { 0xff262a31 };
+    inline juce::Colour nodeBody       { 0xff2e333c };
+    inline juce::Colour nodeSelected   { 0xff4a90d9 };
+    inline juce::Colour headerDsp      { 0xff3d5a80 };
+    inline juce::Colour headerCtrl     { 0xff5c8a4a };
+    inline juce::Colour headerIO       { 0xff55585f };
+    inline juce::Colour audioSignal    { 0xffe8a04c };   // audio cables/sockets: warm
+    inline juce::Colour controlSignal  { 0xff6ecfcf };   // control cables/sockets: cool
+    inline juce::Colour text           { 0xffd8dade };
+    inline juce::Colour textDim        { 0xff8a8f98 };
+    inline juce::Colour playhead       { 0xffe86060 };
+
+    struct Palette
+    {
+        const char* name;
+        juce::Colour background, panel, nodeBody, nodeSelected,
+                     headerDsp, headerCtrl, headerIO,
+                     audioSignal, controlSignal, text, textDim, playhead;
+    };
+
+    inline const std::array<Palette, 3>& palettes()
+    {
+        static const std::array<Palette, 3> all { {
+            { "Slate",
+              juce::Colour (0xff1e2126), juce::Colour (0xff262a31), juce::Colour (0xff2e333c),
+              juce::Colour (0xff4a90d9), juce::Colour (0xff3d5a80), juce::Colour (0xff5c8a4a),
+              juce::Colour (0xff55585f), juce::Colour (0xffe8a04c), juce::Colour (0xff6ecfcf),
+              juce::Colour (0xffd8dade), juce::Colour (0xff8a8f98), juce::Colour (0xffe86060) },
+            { "Light",
+              juce::Colour (0xfff0f1f4), juce::Colour (0xffe2e5ea), juce::Colour (0xffd7dbe3),
+              juce::Colour (0xff2f6fbd), juce::Colour (0xff9fbcd8), juce::Colour (0xffa9c79a),
+              juce::Colour (0xffb9bdc6), juce::Colour (0xffc77f26), juce::Colour (0xff238f8f),
+              juce::Colour (0xff24272c), juce::Colour (0xff5c626e), juce::Colour (0xffd04545) },
+            { "Neon",
+              juce::Colour (0xff0d0f14), juce::Colour (0xff14171e), juce::Colour (0xff1b1f29),
+              juce::Colour (0xff00c8ff), juce::Colour (0xff243a5e), juce::Colour (0xff2e5e2e),
+              juce::Colour (0xff2e3138), juce::Colour (0xffff9a1f), juce::Colour (0xff00e5d0),
+              juce::Colour (0xffe8ecf2), juce::Colour (0xff77808f), juce::Colour (0xffff4060) },
+        } };
+        return all;
+    }
+
+    inline juce::String currentPaletteName = "Slate";
+
+    inline void applyPalette (const juce::String& name)
+    {
+        for (auto& p : palettes())
+            if (name == p.name)
+            {
+                background = p.background;  panel = p.panel;
+                nodeBody = p.nodeBody;      nodeSelected = p.nodeSelected;
+                headerDsp = p.headerDsp;    headerCtrl = p.headerCtrl;
+                headerIO = p.headerIO;      audioSignal = p.audioSignal;
+                controlSignal = p.controlSignal;
+                text = p.text;              textDim = p.textDim;
+                playhead = p.playhead;
+                currentPaletteName = p.name;
+                return;
+            }
+    }
 
     inline juce::Colour headerFor (NodeKind kind)
     {
@@ -40,6 +91,7 @@ namespace melo::theme
             case NodeType::lfo:      return "LFO";
             case NodeType::macro:    return "Macro " + juce::String (macroIndex + 1);
             case NodeType::curve:    return "Curve";
+            case NodeType::hosted:   return "Plugin";
         }
         return {};
     }

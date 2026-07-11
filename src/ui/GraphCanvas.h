@@ -17,7 +17,8 @@ class GraphCanvas : public juce::Component,
 public:
     GraphCanvas (GraphModel&, SelectionModel&, std::function<double()> bpmProvider,
                  std::function<void (int)> openHostedEditorFn,
-                 HostedInstanceLookup hostedLookup);
+                 HostedInstanceLookup hostedLookup,
+                 std::function<float (int)> controllerValueProvider = nullptr);
 
     // Double-clicking a hosted node's header opens its plugin GUI.
     void openHostedEditor (int nodeId) { if (openHostedEditorFn != nullptr) openHostedEditorFn (nodeId); }
@@ -65,6 +66,11 @@ private:
     std::function<double()> getBpm;
     std::function<void (int)> openHostedEditorFn;
     HostedInstanceLookup hostedLookup;
+    std::function<float (int)> controllerValue;   // live [0,1] for cable glow
+
+    bool glowEnabled() const { return (bool) model.state().getProperty (ids::cableGlow, false); }
+    void applyPaletteFromModel();
+    void showAppearanceMenu();
     std::unique_ptr<juce::FileChooser> pluginChooser;
     juce::KnownPluginList installedPlugins;
     bool scannedPlugins = false;

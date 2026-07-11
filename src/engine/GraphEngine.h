@@ -33,6 +33,18 @@ public:
     // Audio thread.
     void process (juce::AudioBuffer<float>& buffer, ProcessContext& ctx);
 
+    // Message thread, display only (cable glow): a controller's most recent
+    // block value in [0,1], 0 if unknown. Reads a float the audio thread
+    // writes without synchronisation — fine for pixels.
+    float controllerValueFor (int modelNodeId) const
+    {
+        if (auto graph = active.load())
+            for (auto& node : graph->nodes)
+                if (node->modelNodeId == modelNodeId)
+                    return node->lastOutput;
+        return 0.0f;
+    }
+
 private:
     std::atomic<std::shared_ptr<CompiledGraph>> active { nullptr };
 

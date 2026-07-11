@@ -77,6 +77,10 @@ namespace ids
     inline const juce::Identifier nextNodeId { "nextNodeId" };
     inline const juce::Identifier macroIndex { "macroIndex" };
 
+    // Appearance, stored on the graph root so it travels with the project.
+    inline const juce::Identifier palette    { "palette" };     // palette name
+    inline const juce::Identifier cableGlow  { "cableGlow" };   // bool: cables follow live values
+
     // Curve node breakpoints: children of the NODE, position/value in [0,1],
     // tension in [-1,1] shaping the segment to the NEXT point.
     inline const juce::Identifier point     { "POINT" };
