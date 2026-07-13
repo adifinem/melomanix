@@ -95,7 +95,10 @@ private:
     void addRow (std::unique_ptr<ParamRow>);
 
     std::vector<std::unique_ptr<ParamRow>> rows;
-    std::unique_ptr<Socket> audioInSocket, audioOutSocket, ctrlOutSocket;
+    std::unique_ptr<Socket> audioInSocket, audioOutSocket;
+    // Controllers have one control output; the XYZ node has one per axis,
+    // each carrying its axis id ("x"/"y"/"z") in the socket's paramId.
+    std::vector<std::unique_ptr<Socket>> ctrlOutSockets;
 
     juce::ComponentDragger dragger;
     int highlightedRow = -1;

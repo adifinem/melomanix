@@ -49,6 +49,18 @@ GraphCanvas::~GraphCanvas()
     observedTree.removeListener (this);
 }
 
+// Which output socket a mod connection leaves from: XYZ sources tag their
+// outputs "x"/"y"/"z"; single-output controllers fall back to their one socket.
+static juce::String srcOutAxis (const juce::ValueTree& conn)
+{
+    switch ((int) conn.getProperty (ids::srcOut, 0))
+    {
+        case 2:  return "z";
+        case 1:  return "y";
+        default: return "x";
+    }
+}
+
 // Mapping: logical (L) space holds nodes at contentPos + panOffset/zoom with a
 // scale(zoom) transform per node, so canvas coords = contentPos*zoom + panOffset.
 juce::Point<float> GraphCanvas::toCanvas (juce::Point<float> contentPos) const
@@ -161,7 +173,8 @@ void GraphCanvas::drawCables (juce::Graphics& g)
             continue;
 
         auto isMod = child.hasProperty (ids::dstParam);
-        auto from = srcComp->socketCentreInParent (isMod ? SocketKind::ctrlOut : SocketKind::audioOut);
+        auto from = srcComp->socketCentreInParent (isMod ? SocketKind::ctrlOut : SocketKind::audioOut,
+                                                   srcOutAxis (child));
         auto to = isMod
                       ? dstComp->socketCentreInParent (SocketKind::paramIn,
                                                        child.getProperty (ids::dstParam).toString())
@@ -211,7 +224,7 @@ juce::ValueTree GraphCanvas::connectionAt (juce::Point<float> canvasPos) const
         if (srcComp == nullptr || dstComp == nullptr)
             continue;
 
-        auto from = srcComp->socketCentreInParent (SocketKind::ctrlOut) * zoom;
+        auto from = srcComp->socketCentreInParent (SocketKind::ctrlOut, srcOutAxis (child)) * zoom;
         auto to   = dstComp->socketCentreInParent (SocketKind::paramIn,
                                                    child.getProperty (ids::dstParam).toString()) * zoom;
 
@@ -322,6 +335,7 @@ void GraphCanvas::showAddNodeMenu (juce::Point<int> canvasPos)
     menu.addSectionHeader ("Add node");
     menu.addItem (1, "LFO");
     menu.addItem (2, "Curve");
+    menu.addItem (7, "XYZ controller");
     menu.addItem (3, "EQ");
     menu.addItem (4, "Delay");
     menu.addSeparator();
@@ -343,6 +357,7 @@ void GraphCanvas::showAddNodeMenu (juce::Point<int> canvasPos)
                         {
                             if (result == 1) model.addNode (NodeType::lfo,   contentPos.x, contentPos.y);
                             if (result == 2) model.addNode (NodeType::curve, contentPos.x, contentPos.y);
+                            if (result == 7) model.addNode (NodeType::xyz,   contentPos.x, contentPos.y);
                             if (result == 3) model.addNode (NodeType::eq,    contentPos.x, contentPos.y);
                             if (result == 4) model.addNode (NodeType::delay, contentPos.x, contentPos.y);
                             if (result == 5) showInstalledPluginsMenu (canvasPos, contentPos);
@@ -519,7 +534,12 @@ void GraphCanvas::endCableDrag (const juce::MouseEvent& e)
     if (out->kind == SocketKind::audioOut && in->kind == SocketKind::audioIn)
         model.addAudioConnection (out->nodeId, in->nodeId);
     else if (out->kind == SocketKind::ctrlOut && in->kind == SocketKind::paramIn)
-        model.addModConnection (out->nodeId, in->nodeId, in->paramId);
+    {
+        // The source socket's axis id ("x"/"y"/"z" on XYZ, empty otherwise)
+        // records which output the cable leaves from.
+        int srcOut = out->paramId == "z" ? 2 : out->paramId == "y" ? 1 : 0;
+        model.addModConnection (out->nodeId, in->nodeId, in->paramId, 1.0f, srcOut);
+    }
 }
 
 void GraphCanvas::showDisconnectMenu (Socket& socket)

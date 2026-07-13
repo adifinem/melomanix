@@ -118,6 +118,7 @@ namespace melo::theme
             case NodeType::lfo:      return "LFO";
             case NodeType::macro:    return "Macro " + juce::String (macroIndex + 1);
             case NodeType::curve:    return "Curve";
+            case NodeType::xyz:      return "XYZ";
             case NodeType::hosted:   return "Plugin";
         }
         return {};

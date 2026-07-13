@@ -144,6 +144,7 @@ std::shared_ptr<CompiledGraph> compileGraph (const juce::ValueTree& graphTree,
                 node = std::make_unique<MacroNode> (macroIndex, value);
                 break;
             }
+            case NodeType::xyz:      node = std::make_unique<XYZNode>(); break;
         }
 
         node->modelNodeId = child.getProperty (ids::nodeId);
@@ -190,6 +191,7 @@ std::shared_ptr<CompiledGraph> compileGraph (const juce::ValueTree& graphTree,
                 continue;
             auto& param = compiled->nodes[(size_t) dst]->params[(size_t) paramIndex];
             param.modSourceIndex = src;
+            param.modSrcOut = child.getProperty (ids::srcOut, 0);
             param.modDepth = child.getProperty (ids::depth, 1.0f);
             param.modOffset = child.getProperty (ids::offset, 0.0f);
 

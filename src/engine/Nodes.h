@@ -43,6 +43,7 @@ struct ParamState
     ParamSpec spec { "", "", 0.0f, 1.0f, 0.0f };
     float baseNorm = 0.0f;
     int   modSourceIndex = -1;   // index into CompiledGraph::nodes, -1 = unmodulated
+    int   modSrcOut = 0;         // which output of the source node (multi-output controllers)
     float modDepth = 0.0f;
     float modOffset = 0.0f;
     std::vector<CurvePoint> morphPoints;   // >=2 => transfer curve replaces the linear map
@@ -91,7 +92,7 @@ public:
             auto norm = p.baseNorm;
             if (p.modSourceIndex >= 0)
             {
-                auto control = nodes[(size_t) p.modSourceIndex]->lastOutput;
+                auto control = nodes[(size_t) p.modSourceIndex]->output (p.modSrcOut);
                 norm = p.morphPoints.size() >= 2
                            ? morphValue (p.morphPoints, control)                       // drawn transfer curve
                            : juce::jlimit (0.0f, 1.0f,
@@ -110,6 +111,10 @@ public:
                 return (int) i;
         return -1;
     }
+
+    // Control output read by downstream params. Single-output controllers
+    // expose output 0 (== lastOutput); multi-output nodes (XYZ) override.
+    virtual float output (int index) const { return index == 0 ? lastOutput : 0.0f; }
 
     const NodeType type;
     int modelNodeId = 0;
@@ -205,6 +210,27 @@ public:
 
 private:
     std::atomic<float>* value;
+};
+
+// A hand-driven vector controller. Each axis (x, y, z) is a smoothed param —
+// settable by dragging the pad and itself modulatable — exposed as its own
+// control output. output(0)=x, output(1)=y, output(2)=z.
+class XYZNode : public EngineNode
+{
+public:
+    XYZNode() : EngineNode (NodeType::xyz) {}
+
+    float evaluate (const ProcessContext&) override
+    {
+        return params.empty() ? 0.0f : params[0].current();   // x drives output 0 / glow
+    }
+
+    float output (int index) const override
+    {
+        return juce::isPositiveAndBelow (index, (int) params.size())
+                   ? params[(size_t) index].current()
+                   : lastOutput;
+    }
 };
 
 } // namespace melo

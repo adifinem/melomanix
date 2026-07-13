@@ -14,6 +14,7 @@ juce::String nodeTypeToString (NodeType t)
         case NodeType::lfo:      return "lfo";
         case NodeType::macro:    return "macro";
         case NodeType::curve:    return "curve";
+        case NodeType::xyz:      return "xyz";
         case NodeType::hosted:   return "hosted";
     }
     jassertfalse;
@@ -28,6 +29,7 @@ NodeType nodeTypeFromString (const juce::String& s)
     if (s == "lfo")      return NodeType::lfo;
     if (s == "macro")    return NodeType::macro;
     if (s == "curve")    return NodeType::curve;
+    if (s == "xyz")      return NodeType::xyz;
     if (s == "hosted")   return NodeType::hosted;
     return NodeType::audioIn;
 }
@@ -43,7 +45,8 @@ NodeKind kindOf (NodeType t)
         case NodeType::hosted:   return NodeKind::dsp;
         case NodeType::lfo:
         case NodeType::macro:
-        case NodeType::curve:    return NodeKind::controller;
+        case NodeType::curve:
+        case NodeType::xyz:      return NodeKind::controller;
     }
     jassertfalse;
     return NodeKind::io;
@@ -82,12 +85,21 @@ const std::vector<ParamSpec>& paramSpecsFor (NodeType t)
         { "depth",  "Depth",  0.0f,   1.0f, 1.0f, 1.0f, "%"     },
     };
 
+    // Each axis is both settable (slider/pad) and modulatable (input socket),
+    // and is emitted as its own control output.
+    static const std::vector<ParamSpec> xyzSpecs {
+        { "x", "X", 0.0f, 1.0f, 0.5f, 1.0f, "%" },
+        { "y", "Y", 0.0f, 1.0f, 0.5f, 1.0f, "%" },
+        { "z", "Z", 0.0f, 1.0f, 0.0f, 1.0f, "%" },
+    };
+
     switch (t)
     {
         case NodeType::eq:       return eqSpecs;
         case NodeType::delay:    return delaySpecs;
         case NodeType::lfo:      return lfoSpecs;
         case NodeType::curve:    return curveSpecs;
+        case NodeType::xyz:      return xyzSpecs;
         case NodeType::audioIn:
         case NodeType::audioOut:
         case NodeType::macro:

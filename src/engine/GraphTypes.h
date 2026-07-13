@@ -15,6 +15,7 @@ enum class NodeType
     lfo,
     macro,
     curve,
+    xyz,     // a hand-driven X/Y/Z vector controller: three control outputs
     hosted   // a third-party plugin loaded as a DSP node
 };
 
@@ -74,6 +75,7 @@ namespace ids
     inline const juce::Identifier dstParam   { "dstParam" };  // set => mod connection, absent => audio
     inline const juce::Identifier depth      { "depth" };     // -1..1, negative inverts
     inline const juce::Identifier offset     { "offset" };    // -1..1 shift of the mod centre
+    inline const juce::Identifier srcOut     { "srcOut" };    // which output of a multi-output source (0=default)
     inline const juce::Identifier nextNodeId { "nextNodeId" };
     inline const juce::Identifier macroIndex { "macroIndex" };
 

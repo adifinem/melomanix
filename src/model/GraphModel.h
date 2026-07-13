@@ -33,8 +33,10 @@ public:
 
     // Audio edge (src's audio out -> dst's audio in). Returns false if rejected.
     bool addAudioConnection (int srcNodeId, int dstNodeId);
-    // Mod edge (controller output -> a parameter socket on dst). Returns false if rejected.
-    bool addModConnection (int srcNodeId, int dstNodeId, const juce::String& paramId, float depth = 1.0f);
+    // Mod edge (controller output -> a parameter socket on dst). srcOut selects
+    // which output of a multi-output source (XYZ). Returns false if rejected.
+    bool addModConnection (int srcNodeId, int dstNodeId, const juce::String& paramId,
+                           float depth = 1.0f, int srcOut = 0);
     void removeConnection (const juce::ValueTree& conn);
 
     void setParamValue (int nodeId, const juce::String& paramId, float denormalisedValue);

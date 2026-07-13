@@ -70,7 +70,21 @@ NodeComponent::NodeComponent (GraphModel& m, juce::ValueTree nodeTree, Selection
     if (type != NodeType::audioOut && kindOf (type) != NodeKind::controller)
         addAndMakeVisible (*(audioOutSocket = std::make_unique<Socket> (SocketKind::audioOut, nodeId)));
     if (kindOf (type) == NodeKind::controller)
-        addAndMakeVisible (*(ctrlOutSocket = std::make_unique<Socket> (SocketKind::ctrlOut, nodeId)));
+    {
+        // One output for most controllers; XYZ exposes one per axis, tagged
+        // with the axis id so cables know which output they leave from.
+        auto addCtrlOut = [this] (juce::String axisId)
+        {
+            auto socket = std::make_unique<Socket> (SocketKind::ctrlOut, nodeId, axisId);
+            addAndMakeVisible (*socket);
+            ctrlOutSockets.push_back (std::move (socket));
+        };
+        if (type == NodeType::xyz)
+            for (auto* axis : { "x", "y", "z" })
+                addCtrlOut (axis);
+        else
+            addCtrlOut ({});
+    }
 
     auto bodyHeight = (int) rows.size() * rowHeight + 8;
     if (type == NodeType::hosted && rows.empty())
@@ -240,7 +254,16 @@ void NodeComponent::resized()
 {
     if (audioInSocket)  audioInSocket->setCentrePosition (7, headerHeight / 2);
     if (audioOutSocket) audioOutSocket->setCentrePosition (getWidth() - 7, headerHeight / 2);
-    if (ctrlOutSocket)  ctrlOutSocket->setCentrePosition (getWidth() - 7, headerHeight / 2);
+
+    // A single control output sits on the header; XYZ's per-axis outputs line
+    // up with their X/Y/Z rows on the right edge.
+    for (size_t i = 0; i < ctrlOutSockets.size(); ++i)
+    {
+        int y = ctrlOutSockets.size() == 1
+                    ? headerHeight / 2
+                    : headerHeight + (int) i * rowHeight + rowHeight / 2;
+        ctrlOutSockets[i]->setCentrePosition (getWidth() - 7, y);
+    }
 
     auto y = headerHeight;
     for (auto& row : rows)
@@ -396,7 +419,13 @@ juce::Point<float> NodeComponent::socketCentreInParent (SocketKind k, const juce
     {
         case SocketKind::audioIn:  socket = audioInSocket.get(); break;
         case SocketKind::audioOut: socket = audioOutSocket.get(); break;
-        case SocketKind::ctrlOut:  socket = ctrlOutSocket.get(); break;
+        case SocketKind::ctrlOut:
+            for (auto& s : ctrlOutSockets)
+                if (s->paramId == param)
+                    socket = s.get();
+            if (socket == nullptr && ! ctrlOutSockets.empty())
+                socket = ctrlOutSockets.front().get();   // default output for single-output controllers
+            break;
         case SocketKind::paramIn:
             for (auto& row : rows)
                 if (row->socket->paramId == param)
@@ -412,9 +441,13 @@ juce::Point<float> NodeComponent::socketCentreInParent (SocketKind k, const juce
 
 Socket* NodeComponent::socketAt (juce::Point<int> localPos)
 {
-    for (auto* candidate : { audioInSocket.get(), audioOutSocket.get(), ctrlOutSocket.get() })
+    for (auto* candidate : { audioInSocket.get(), audioOutSocket.get() })
         if (candidate != nullptr && candidate->getBounds().expanded (4).contains (localPos))
             return candidate;
+
+    for (auto& s : ctrlOutSockets)
+        if (s->getBounds().expanded (4).contains (localPos))
+            return s.get();
 
     for (auto& row : rows)
         if (row->socket->getBounds().expanded (4).contains (localPos))

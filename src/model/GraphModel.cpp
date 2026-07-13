@@ -223,7 +223,8 @@ bool GraphModel::addAudioConnection (int srcNodeId, int dstNodeId)
     return true;
 }
 
-bool GraphModel::addModConnection (int srcNodeId, int dstNodeId, const juce::String& paramId, float depth)
+bool GraphModel::addModConnection (int srcNodeId, int dstNodeId, const juce::String& paramId,
+                                   float depth, int srcOut)
 {
     auto src = getNode (srcNodeId);
     auto dst = getNode (dstNodeId);
@@ -264,6 +265,8 @@ bool GraphModel::addModConnection (int srcNodeId, int dstNodeId, const juce::Str
     conn.setProperty (ids::dstNode, dstNodeId, nullptr);
     conn.setProperty (ids::dstParam, paramId, nullptr);
     conn.setProperty (ids::depth, depth, nullptr);
+    if (srcOut != 0)
+        conn.setProperty (ids::srcOut, srcOut, nullptr);
     tree.addChild (conn, -1, nullptr);
     return true;
 }

@@ -335,6 +335,51 @@ int main()
         expect (mixParam.morphPoints.size() == 2, "compiled connection carries its morph points");
     }
 
+    // --- XYZ controller: independent multi-output routing (issue #9) ------
+    {
+        GraphModel xyzModel;
+        auto delayA = xyzModel.addNode (NodeType::delay, 0.0f, 0.0f);
+        auto delayB = xyzModel.addNode (NodeType::delay, 0.0f, 100.0f);
+        auto xyz    = xyzModel.addNode (NodeType::xyz,   0.0f, 200.0f);
+        xyzModel.setParamValue (xyz, "x", 0.2f);
+        xyzModel.setParamValue (xyz, "y", 0.6f);
+        xyzModel.setParamValue (xyz, "z", 0.9f);
+
+        // Y output (srcOut 1) -> delayA.mix, Z output (srcOut 2) -> delayB.mix,
+        // each through an identity morph so the param settles to that axis.
+        expect (xyzModel.addModConnection (xyz, delayA, "mix", 1.0f, 1), "xyz: Y -> delayA.mix");
+        expect (xyzModel.addModConnection (xyz, delayB, "mix", 1.0f, 2), "xyz: Z -> delayB.mix");
+        for (auto c : xyzModel.state())
+            if (c.hasType (ids::conn) && c.hasProperty (ids::dstParam))
+                for (auto [t, v] : { std::pair<float, float> { 0.0f, 0.0f }, { 1.0f, 1.0f } })
+                {
+                    juce::ValueTree p (ids::point);
+                    p.setProperty (ids::pointT, t, nullptr);
+                    p.setProperty (ids::pointV, v, nullptr);
+                    c.addChild (p, -1, nullptr);
+                }
+
+        std::vector<std::atomic<float>*> noMacros;
+        auto xyzCompiled = compileGraph (xyzModel.state(), noMacros);
+        GraphEngine xyzEngine;
+        xyzEngine.prepare (48000.0, 256);
+        xyzEngine.setGraph (xyzCompiled);
+        juce::AudioBuffer<float> xyzBuf (2, 256);
+        ProcessContext xyzCtx; xyzCtx.sampleRate = 48000.0; xyzCtx.maxBlockSize = 256; xyzCtx.numSamples = 256;
+        for (int b = 0; b < 400; ++b) { xyzEngine.process (xyzBuf, xyzCtx); xyzBuf.clear(); }
+
+        EngineNode* dA = nullptr; EngineNode* dB = nullptr;
+        for (auto& n : xyzCompiled->nodes)
+        {
+            if (n->modelNodeId == delayA) dA = n.get();
+            if (n->modelNodeId == delayB) dB = n.get();
+        }
+        auto mixA = dA->params[(size_t) dA->indexOfParam ("mix")].current();
+        auto mixB = dB->params[(size_t) dB->indexOfParam ("mix")].current();
+        expect (std::abs (mixA - 0.6f) < 0.03f, "xyz Y output (0.6) routes independently to delayA.mix");
+        expect (std::abs (mixB - 0.9f) < 0.03f, "xyz Z output (0.9) routes independently to delayB.mix");
+    }
+
     // --- Serialisation round-trip ---------------------------------------
     auto xml = model.state().toXmlString();
     GraphModel restored;
