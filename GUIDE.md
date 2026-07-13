@@ -23,6 +23,40 @@ Color code everywhere: **orange = audio**, **teal = control signals**.
 
 ---
 
+## New in v0.5 — second feedback round: morph curves, free colours, XYZ
+
+Follow-ups from Will's testing of v0.4, plus a new request.
+
+- **Connection morph curves ([#7]).** A modulation cable is no longer just an
+  amount slider — it carries a full **transfer curve** that maps the source's
+  value (input, left→right) to the value it applies (output, bottom→top).
+  **Click a cable** in the graph (or its row in the Matrix pane) and shape the
+  curve in the timeline pane with the same points-and-tension editing the
+  Curve node uses. A red marker shows where the source currently sits and what
+  it maps to. Draw a downward line to invert, a hump for a there-and-back
+  sweep, a staircase for stepped motion — whatever you want. Until you shape
+  it, the cable keeps the old linear behaviour, so existing patches are
+  unchanged. Each Matrix row shows a mini preview of its curve.
+- **Curve grid: any number ([#4]).** The point-snap grid menu gains
+  **Custom…**, so you can type any column/row counts, not just the presets.
+- **Free colours ([#8]).** Appearance → **Custom colours…** opens a colour
+  wheel for each part of the UI (background, cables, headers, text, …).
+  Changes apply live and are saved with the project. *Reset* returns to Slate.
+- **XYZ controller ([#9]).** Right-click the canvas → **XYZ controller**. One
+  node, three axes (X/Y/Z); each is a value you set (and can itself modulate),
+  emitted from its own output socket — patch X, Y and Z to different
+  parameters for vector-style control. *Note:* importing VST2 or FL
+  `.fst`/`.dll` controllers isn't possible in an open-source JUCE 8 build
+  (there's no redistributable VST2 SDK, and `.fst` is FL-only), so this is the
+  build-our-own alternative you suggested.
+
+[#4]: ../../issues/4
+[#7]: ../../issues/7
+[#8]: ../../issues/8
+[#9]: ../../issues/9
+
+---
+
 ## New in v0.4 — editing quality-of-life: Will's seven requests
 
 All seven requests from the first user feedback round ([#1](../../issues/1)).
