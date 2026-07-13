@@ -45,6 +45,13 @@ public:
     {
         g.fillAll (theme::panel);
 
+        // A selected connection shows its morph curve instead of a node lane.
+        if (auto conn = selection.getSelectedConnection(); conn.isValid())
+        {
+            paintConnectionMorph (g, conn);
+            return;
+        }
+
         auto nodeId = selection.getSelectedNodeId();
         auto node = processor.graphModel.getNode (nodeId);
 
@@ -84,12 +91,17 @@ public:
 
     void mouseDown (const juce::MouseEvent& e) override
     {
-        auto node = selectedCurveNode();
+        auto node = editHost();
         if (! node.isValid())
             return;
 
         draggingPoint = juce::ValueTree();
         tensionSegmentStart = juce::ValueTree();
+
+        // Editing a connection's morph for the first time seeds an identity
+        // ramp so there are endpoints to grab (converts it to morph mode).
+        if (! e.mods.isPopupMenu())
+            seedMorphIfNeeded (node);
 
         if (auto point = pointAt (node, e.getPosition()); point.isValid())
         {
@@ -143,10 +155,11 @@ public:
 
     void mouseDoubleClick (const juce::MouseEvent& e) override
     {
-        auto node = selectedCurveNode();
+        auto node = editHost();
         if (! node.isValid())
             return;
 
+        seedMorphIfNeeded (node);
         auto area = laneBounds().toFloat();
         auto t = juce::jlimit (0.0f, 1.0f, (e.position.x - area.getX()) / area.getWidth());
         auto v = juce::jlimit (0.0f, 1.0f, (area.getBottom() - e.position.y) / area.getHeight());
@@ -187,7 +200,7 @@ private:
 
     void showGridMenu()
     {
-        auto node = selectedCurveNode();
+        auto node = editHost();
         if (! node.isValid())
             return;
 
@@ -258,7 +271,7 @@ private:
 
     void updateGridButton()
     {
-        auto node = selectedCurveNode();
+        auto node = editHost();
         gridButton.setVisible (node.isValid());
         if (node.isValid())
             gridButton.setButtonText (gridLabel (node.getProperty (ids::gridX, 0),
@@ -285,6 +298,31 @@ private:
         if (node.isValid() && processor.graphModel.getNodeType (node) == NodeType::curve)
             return node;
         return {};
+    }
+
+    // The tree whose POINT children the lane edits: a selected connection's
+    // morph curve takes priority, otherwise a selected curve node.
+    juce::ValueTree editHost() const
+    {
+        if (auto conn = selection.getSelectedConnection(); conn.isValid())
+            return conn;
+        return selectedCurveNode();
+    }
+
+    // A connection starts on the classic linear map (no points). The first
+    // edit seeds an identity ramp, switching the engine to the morph path.
+    static void seedMorphIfNeeded (juce::ValueTree host)
+    {
+        if (! host.hasType (ids::conn) || countPoints (host) >= 2)
+            return;
+        for (auto [t, v] : { std::pair<float, float> { 0.0f, 0.0f }, { 1.0f, 1.0f } })
+        {
+            juce::ValueTree p (ids::point);
+            p.setProperty (ids::pointT, t, nullptr);
+            p.setProperty (ids::pointV, v, nullptr);
+            p.setProperty (ids::tension, 0.0f, nullptr);
+            host.addChild (p, -1, nullptr);
+        }
     }
 
     static int countPoints (const juce::ValueTree& node)
@@ -434,6 +472,92 @@ private:
 
         auto phase = (float) std::fmod (processor.getPlayheadBeats() / (double) lengthBeats, 1.0);
         drawPlayheadAt (g, area, phase < 0.0f ? phase + 1.0f : phase);
+    }
+
+    juce::String nodeName (int id) const
+    {
+        auto node = processor.graphModel.getNode (id);
+        if (! node.isValid())
+            return "?";
+        auto type = processor.graphModel.getNodeType (node);
+        if (type == NodeType::hosted)
+            return node.getProperty (ids::pluginName, "Plugin").toString();
+        return theme::titleFor (type, (int) node.getProperty (ids::macroIndex, -1));
+    }
+
+    // The per-connection morph editor (issue #7): x is the incoming control
+    // value, y the value it maps to. Until shaped, the connection uses the
+    // classic linear map and this shows a guide.
+    void paintConnectionMorph (juce::Graphics& g, const juce::ValueTree& conn)
+    {
+        int srcId = conn.getProperty (ids::srcNode);
+        int dstId = conn.getProperty (ids::dstNode);
+        auto dstParam = conn.getProperty (ids::dstParam).toString();
+
+        g.setColour (theme::textDim);
+        g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+        auto header = nodeName (srcId) + juce::String (juce::CharPointer_UTF8 (" \xe2\x80\xa3 "))
+                      + nodeName (dstId) + "." + dstParam
+                      + "   —   morph: input \xE2\x86\x92 output · double-click to add · right-click to delete · drag between points to bend · CTRL = no snap";
+        g.drawText (header, getLocalBounds().reduced (8).removeFromTop (16),
+                    juce::Justification::centredLeft);
+
+        auto area = laneBounds().toFloat();
+        drawLaneFrame (g, area, 4);
+
+        int gx = conn.getProperty (ids::gridX, 0), gy = conn.getProperty (ids::gridY, 0);
+        if (gx > 0)
+        {
+            g.setColour (theme::controlSignal.withAlpha (0.18f));
+            for (int i = 0; i <= gx; ++i)
+                g.drawVerticalLine ((int) (area.getX() + area.getWidth() * (float) i / (float) gx),
+                                    area.getY(), area.getBottom());
+            for (int j = 0; j <= gy; ++j)
+                g.drawHorizontalLine ((int) (area.getY() + area.getHeight() * (float) j / (float) gy),
+                                      area.getX(), area.getRight());
+        }
+
+        auto points = sortedPoints (conn);
+        if (points.size() < 2)
+        {
+            g.setColour (theme::controlSignal.withAlpha (0.35f));
+            g.drawLine (area.getX(), area.getBottom(), area.getRight(), area.getY(), 1.2f);
+            g.setColour (theme::textDim);
+            g.setFont (11.0f);
+            g.drawText ("linear (default) \xE2\x80\x94 click to shape a morph curve",
+                        area, juce::Justification::centred);
+        }
+        else
+        {
+            juce::Path path;
+            for (float x = 0.0f; x <= area.getWidth(); x += 1.0f)
+            {
+                auto value = CurveNode::valueAt (points, x / area.getWidth());
+                auto point = juce::Point<float> (area.getX() + x, area.getBottom() - value * area.getHeight());
+                x == 0.0f ? path.startNewSubPath (point) : path.lineTo (point);
+            }
+            g.setColour (theme::controlSignal);
+            g.strokePath (path, juce::PathStrokeType (1.8f));
+
+            for (auto& point : points)
+            {
+                auto centre = pointToScreen (point, area);
+                g.setColour (theme::panel);
+                g.fillEllipse (centre.x - 5.0f, centre.y - 5.0f, 10.0f, 10.0f);
+                g.setColour (theme::controlSignal);
+                g.drawEllipse (centre.x - 5.0f, centre.y - 5.0f, 10.0f, 10.0f, 1.6f);
+            }
+        }
+
+        // Live marker: where the source sits on the input axis, and the value
+        // it currently maps to.
+        auto src = juce::jlimit (0.0f, 1.0f, processor.getControllerValue (srcId));
+        auto mx = area.getX() + src * area.getWidth();
+        g.setColour (theme::playhead.withAlpha (0.85f));
+        g.drawVerticalLine ((int) mx, area.getY(), area.getBottom());
+        auto outv = points.size() >= 2 ? CurveNode::valueAt (points, src) : src;
+        auto my = area.getBottom() - outv * area.getHeight();
+        g.fillEllipse (mx - 3.0f, my - 3.0f, 6.0f, 6.0f);
     }
 
     void paintMacroLane (juce::Graphics& g, juce::Rectangle<float> area, const juce::ValueTree& node)

@@ -1,26 +1,29 @@
 #pragma once
 
 #include "../model/GraphModel.h"
+#include "../engine/Nodes.h"
+#include "Selection.h"
 #include "Theme.h"
+#include <algorithm>
 
 namespace melo
 {
 
-// Fixed left pane: every connection in the graph as a row. Mod connections
-// get per-connection remap controls — amount (-100%..100%, negative
-// inverts) and offset (shifts the modulation centre) — writing straight to
-// the connection's properties, which the processor recompiles from. Audio
+// Fixed left pane: every connection in the graph as a row. Clicking a mod
+// connection selects it, opening its morph curve in the timeline pane
+// (issue #7); each row shows a small preview of that curve. Audio
 // connections are listed for overview only.
 //
 // Collapses to a thin vertical tab so the graph gets the space back.
 class MatrixPane : public juce::Component,
                    private juce::ValueTree::Listener,
+                   private juce::ChangeListener,
                    private juce::Timer
 {
 public:
     static constexpr int expandedWidth = 224, collapsedWidth = 20;
 
-    explicit MatrixPane (GraphModel& m) : model (m)
+    MatrixPane (GraphModel& m, SelectionModel& sel) : model (m), selection (sel)
     {
         toggle.setButtonText ("<");
         toggle.onClick = [this]
@@ -36,12 +39,17 @@ public:
         viewport.setScrollBarsShown (true, false);
         addAndMakeVisible (viewport);
 
+        selection.addChangeListener (this);
         startTimerHz (4);   // catches replaceState() swapping the tree out
         attach();
         rebuild();
     }
 
-    ~MatrixPane() override { observed.removeListener (this); }
+    ~MatrixPane() override
+    {
+        selection.removeChangeListener (this);
+        observed.removeListener (this);
+    }
 
     int preferredWidth() const { return expanded ? expandedWidth : collapsedWidth; }
     std::function<void()> onWidthChanged;
@@ -92,8 +100,9 @@ private:
     {
         juce::ValueTree conn;
         bool isMod = false;
+        bool selected = false;
         juce::Label title;
-        juce::Slider amount, offset;
+        std::function<void()> onSelect;
 
         Row()
         {
@@ -101,37 +110,66 @@ private:
             title.setColour (juce::Label::textColourId, theme::text);
             title.setInterceptsMouseClicks (false, false);
             addAndMakeVisible (title);
+        }
 
-            for (auto* s : { &amount, &offset })
-            {
-                s->setSliderStyle (juce::Slider::LinearHorizontal);
-                s->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-                s->setRange (-1.0, 1.0, 0.0);
-                s->setDoubleClickReturnValue (true, 0.0);
-                s->setPopupDisplayEnabled (true, true, nullptr);
-                addChildComponent (*s);
-            }
-            amount.setColour (juce::Slider::trackColourId, theme::controlSignal.withAlpha (0.4f));
-            offset.setColour (juce::Slider::trackColourId, theme::textDim.withAlpha (0.4f));
+        void mouseDown (const juce::MouseEvent&) override
+        {
+            if (isMod && onSelect != nullptr)
+                onSelect();
         }
 
         void resized() override
         {
-            auto area = getLocalBounds().reduced (6, 1);
-            title.setBounds (area.removeFromTop (15));
-            if (isMod)
-            {
-                auto sliders = area.reduced (0, 1);
-                amount.setBounds (sliders.removeFromLeft (sliders.getWidth() / 2 - 2));
-                sliders.removeFromLeft (4);
-                offset.setBounds (sliders);
-            }
+            title.setBounds (getLocalBounds().reduced (6, 1).removeFromTop (15));
         }
 
         void paint (juce::Graphics& g) override
         {
-            g.setColour (theme::background.withAlpha (0.5f));
-            g.fillRoundedRectangle (getLocalBounds().toFloat().reduced (2.0f, 1.0f), 4.0f);
+            auto bounds = getLocalBounds().toFloat().reduced (2.0f, 1.0f);
+            g.setColour ((selected ? theme::nodeSelected.withAlpha (0.25f)
+                                   : theme::background.withAlpha (0.5f)));
+            g.fillRoundedRectangle (bounds, 4.0f);
+            if (selected)
+            {
+                g.setColour (theme::nodeSelected);
+                g.drawRoundedRectangle (bounds, 4.0f, 1.2f);
+            }
+
+            if (! isMod)
+                return;
+
+            // Miniature of the connection's transfer curve: a diagonal while
+            // it's on the default linear map, the drawn shape once shaped.
+            auto preview = getLocalBounds().reduced (8, 2);
+            preview.removeFromTop (16);
+            auto area = preview.toFloat();
+            g.setColour (theme::background);
+            g.fillRect (area);
+
+            std::vector<CurvePoint> pts;
+            for (auto child : conn)
+                if (child.hasType (ids::point))
+                    pts.push_back ({ child.getProperty (ids::pointT, 0.0f),
+                                     child.getProperty (ids::pointV, 0.5f),
+                                     child.getProperty (ids::tension, 0.0f) });
+            std::sort (pts.begin(), pts.end(), [] (auto& a, auto& b) { return a.t < b.t; });
+
+            g.setColour (theme::controlSignal.withAlpha (pts.size() >= 2 ? 0.95f : 0.4f));
+            if (pts.size() < 2)
+            {
+                g.drawLine (area.getX(), area.getBottom(), area.getRight(), area.getY(), 1.0f);
+            }
+            else
+            {
+                juce::Path path;
+                for (float x = 0.0f; x <= area.getWidth(); x += 2.0f)
+                {
+                    auto v = CurveNode::valueAt (pts, x / area.getWidth());
+                    auto p = juce::Point<float> (area.getX() + x, area.getBottom() - v * area.getHeight());
+                    x == 0.0f ? path.startNewSubPath (p) : path.lineTo (p);
+                }
+                g.strokePath (path, juce::PathStrokeType (1.2f));
+            }
         }
     };
 
@@ -175,23 +213,8 @@ private:
 
             if (row->isMod)
             {
-                row->amount.setVisible (true);
-                row->offset.setVisible (true);
-
-                row->amount.setValue ((float) child.getProperty (ids::depth, 1.0f),
-                                      juce::dontSendNotification);
-                row->offset.setValue ((float) child.getProperty (ids::offset, 0.0f),
-                                      juce::dontSendNotification);
-
-                row->amount.textFromValueFunction = [] (double v)
-                { return "amount " + juce::String ((int) std::lround (v * 100.0)) + "%"; };
-                row->offset.textFromValueFunction = [] (double v)
-                { return "offset " + juce::String (v, 2); };
-
-                row->amount.onValueChange = [r = row.get()]
-                { juce::ValueTree (r->conn).setProperty (ids::depth, (float) r->amount.getValue(), nullptr); };
-                row->offset.onValueChange = [r = row.get()]
-                { juce::ValueTree (r->conn).setProperty (ids::offset, (float) r->offset.getValue(), nullptr); };
+                row->onSelect = [this, c = child] { selection.selectConnection (c); };
+                row->selected = (child == selection.getSelectedConnection());
             }
 
             content.addAndMakeVisible (*row);
@@ -218,32 +241,36 @@ private:
         content.setSize (content.getWidth(), juce::jmax (1, y));
     }
 
-    // Connections added/removed anywhere in the tree refresh the list;
-    // property edits from elsewhere (depth menu, loads) refresh sliders.
+    // Connections/nodes added or removed rebuild the list; morph POINT edits
+    // just repaint the row previews.
     void valueTreeChildAdded (juce::ValueTree&, juce::ValueTree& child) override
     {
         if (child.hasType (ids::conn) || child.hasType (ids::node))
             rebuild();
+        else if (child.hasType (ids::point))
+            content.repaint();
     }
     void valueTreeChildRemoved (juce::ValueTree&, juce::ValueTree& child, int) override
     {
         if (child.hasType (ids::conn) || child.hasType (ids::node))
             rebuild();
+        else if (child.hasType (ids::point))
+            content.repaint();
     }
-    void valueTreePropertyChanged (juce::ValueTree& tree, const juce::Identifier& property) override
+    void valueTreePropertyChanged (juce::ValueTree& tree, const juce::Identifier&) override
     {
-        if (! tree.hasType (ids::conn))
-            return;
+        if (tree.hasType (ids::point))
+            content.repaint();
+    }
+
+    // Selection changed elsewhere (a cable clicked on the canvas): refresh
+    // which row is highlighted.
+    void changeListenerCallback (juce::ChangeBroadcaster*) override
+    {
+        auto sel = selection.getSelectedConnection();
         for (auto& row : rows)
-            if (row->conn == tree)
-            {
-                if (property == ids::depth)
-                    row->amount.setValue ((float) tree.getProperty (ids::depth, 1.0f),
-                                          juce::dontSendNotification);
-                else if (property == ids::offset)
-                    row->offset.setValue ((float) tree.getProperty (ids::offset, 0.0f),
-                                          juce::dontSendNotification);
-            }
+            row->selected = row->conn == sel;
+        content.repaint();
     }
 
     void timerCallback() override
@@ -256,6 +283,7 @@ private:
     }
 
     GraphModel& model;
+    SelectionModel& selection;
     juce::ValueTree observed;
     juce::TextButton toggle;
     juce::Viewport viewport;

@@ -54,6 +54,9 @@ private:
     void showInstalledPluginsMenu (juce::Point<int> canvasPos, juce::Point<float> contentPos);
     void chooseAndLoadPlugin (juce::Point<float> contentPos);
     NodeComponent* findNodeComponent (int nodeId) const;
+    // Nearest mod connection whose cable passes under a canvas-space point,
+    // or an invalid tree if none is within the hit threshold.
+    juce::ValueTree connectionAt (juce::Point<float> canvasPos) const;
     juce::Point<float> contentPosFor (const juce::ValueTree& node) const;
     void applyViewTransform();
 

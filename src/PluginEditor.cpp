@@ -4,7 +4,7 @@ MelomanixEditor::MelomanixEditor (MelomanixProcessor& p)
     : AudioProcessorEditor (p),
       processor (p),
       macroStrip (p),
-      matrixPane (p.graphModel),
+      matrixPane (p.graphModel, selection),
       graphCanvas (p.graphModel, selection, [&p] { return p.getBpm(); },
                    [&p] (int nodeId) { p.hostedPlugins.showEditorWindow (nodeId); },
                    [&p] (int nodeId) { return p.hostedPlugins.instanceFor (nodeId); },

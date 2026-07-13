@@ -196,6 +196,42 @@ void GraphCanvas::drawCables (juce::Graphics& g)
     }
 }
 
+juce::ValueTree GraphCanvas::connectionAt (juce::Point<float> canvasPos) const
+{
+    juce::ValueTree best;
+    float bestDist = 7.0f;   // px in canvas space
+
+    for (auto child : model.state())
+    {
+        if (! child.hasType (ids::conn) || ! child.hasProperty (ids::dstParam))
+            continue;
+
+        auto* srcComp = findNodeComponent (child.getProperty (ids::srcNode));
+        auto* dstComp = findNodeComponent (child.getProperty (ids::dstNode));
+        if (srcComp == nullptr || dstComp == nullptr)
+            continue;
+
+        auto from = srcComp->socketCentreInParent (SocketKind::ctrlOut) * zoom;
+        auto to   = dstComp->socketCentreInParent (SocketKind::paramIn,
+                                                   child.getProperty (ids::dstParam).toString()) * zoom;
+
+        juce::Path path;
+        auto bend = juce::jmax (30.0f, std::abs (to.x - from.x) * 0.5f);
+        path.startNewSubPath (from);
+        path.cubicTo (from.translated (bend, 0.0f), to.translated (-bend, 0.0f), to);
+
+        juce::Point<float> nearest;
+        path.getNearestPoint (canvasPos, nearest);
+        auto d = nearest.getDistanceFrom (canvasPos);
+        if (d < bestDist)
+        {
+            bestDist = d;
+            best = child;
+        }
+    }
+    return best;
+}
+
 // --- background interaction -------------------------------------------------
 
 void GraphCanvas::mouseDown (const juce::MouseEvent& e)
@@ -210,6 +246,14 @@ void GraphCanvas::mouseDown (const juce::MouseEvent& e)
     if (e.mods.isMiddleButtonDown())
     {
         panDragStart = panOffset;
+        return;
+    }
+
+    // Clicking a control cable opens its morph curve in the timeline pane.
+    if (auto conn = connectionAt (e.position); conn.isValid())
+    {
+        selection.selectConnection (conn);
+        repaint();
         return;
     }
 

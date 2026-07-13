@@ -86,6 +86,13 @@ float CurveNode::valueAt (const std::vector<CurvePoint>& pts, float phase)
     return pts.back().v;
 }
 
+// Per-connection morph: the same breakpoint interpolation the curve node
+// uses, applied as a transfer function on an incoming control value.
+float morphValue (const std::vector<CurvePoint>& sortedPoints, float x)
+{
+    return CurveNode::valueAt (sortedPoints, juce::jlimit (0.0f, 1.0f, x));
+}
+
 float CurveNode::evaluate (const ProcessContext& ctx)
 {
     auto lengthBeats = params[0].current();

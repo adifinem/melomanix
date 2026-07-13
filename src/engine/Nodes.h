@@ -17,11 +17,27 @@ struct ProcessContext
     int    numSamples = 0;
 };
 
-// A parameter slot on a compiled node. `baseNorm` is the knob position;
-// a mod connection offsets it bipolarly in the normalised domain:
-//     effective = clamp01(base + offset + depth * (control*2 - 1))
-// then denormalised and smoothed before use. Controllers emit in [0,1].
-// Negative depth inverts the modulation; offset shifts its centre.
+// A curve breakpoint, shared by curve-node lanes and per-connection morph
+// maps: position t and output v in [0,1], tension shaping the segment to
+// the next point [-1,1].
+struct CurvePoint
+{
+    float t = 0.0f;
+    float v = 0.5f;
+    float tension = 0.0f;
+};
+
+// Evaluate a t-sorted breakpoint set at x in [0,1] -> [0,1]. Defined in
+// Nodes.cpp (wraps CurveNode::valueAt) so ParamState can morph a control
+// signal before it modulates, without depending on CurveNode's declaration.
+float morphValue (const std::vector<CurvePoint>& sortedPoints, float x);
+
+// A parameter slot on a compiled node. `baseNorm` is the knob position.
+// A mod connection either maps the control signal through a per-connection
+// morph curve (when one is drawn) or, by default, offsets the knob
+// bipolarly:  effective = clamp01(base + offset + depth * (control*2 - 1)).
+// The result is denormalised and smoothed before use. Controllers emit
+// in [0,1]; negative depth inverts, offset shifts the centre.
 struct ParamState
 {
     ParamSpec spec { "", "", 0.0f, 1.0f, 0.0f };
@@ -29,6 +45,7 @@ struct ParamState
     int   modSourceIndex = -1;   // index into CompiledGraph::nodes, -1 = unmodulated
     float modDepth = 0.0f;
     float modOffset = 0.0f;
+    std::vector<CurvePoint> morphPoints;   // >=2 => transfer curve replaces the linear map
     juce::SmoothedValue<float> smoothed;
 
     float current() const { return smoothed.getCurrentValue(); }
@@ -73,9 +90,14 @@ public:
         {
             auto norm = p.baseNorm;
             if (p.modSourceIndex >= 0)
-                norm = juce::jlimit (0.0f, 1.0f,
-                                     norm + p.modOffset
-                                         + p.modDepth * (nodes[(size_t) p.modSourceIndex]->lastOutput * 2.0f - 1.0f));
+            {
+                auto control = nodes[(size_t) p.modSourceIndex]->lastOutput;
+                norm = p.morphPoints.size() >= 2
+                           ? morphValue (p.morphPoints, control)                       // drawn transfer curve
+                           : juce::jlimit (0.0f, 1.0f,
+                                           norm + p.modOffset
+                                               + p.modDepth * (control * 2.0f - 1.0f)); // default bipolar map
+            }
             p.smoothed.setTargetValue (p.spec.denormalise (norm));
             p.smoothed.getNextValue();
         }
@@ -146,13 +168,6 @@ public:
 private:
     juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Linear> delayLine { 1 };
     double sampleRate = 44100.0;
-};
-
-struct CurvePoint
-{
-    float t = 0.0f;         // position within the loop, [0,1]
-    float v = 0.5f;         // output value, [0,1]
-    float tension = 0.0f;   // shapes the segment to the next point, [-1,1]
 };
 
 // A drawn breakpoint controller: loops over `length` beats of the transport,

@@ -285,6 +285,56 @@ int main()
                 "connection depth inverts and offset shifts the modulation");
     }
 
+    // --- Per-connection morph curve (issue #7) ---------------------------
+    {
+        GraphModel morphModel;
+        auto mDelay = morphModel.addNode (NodeType::delay, 0.0f, 0.0f);
+        auto mMacro = morphModel.addMacroNode (0, 0.0f, 100.0f);
+        expect (morphModel.addModConnection (mMacro, mDelay, "mix"), "morph: macro -> delay.mix");
+
+        // Give the connection an inverting transfer curve: source 0 -> 1,
+        // source 1 -> 0. This must override the default linear map.
+        juce::ValueTree morphConn;
+        for (auto c : morphModel.state())
+            if (c.hasType (ids::conn) && c.hasProperty (ids::dstParam))
+                morphConn = c;
+        for (auto [t, v] : { std::pair<float, float> { 0.0f, 1.0f }, { 1.0f, 0.0f } })
+        {
+            juce::ValueTree p (ids::point);
+            p.setProperty (ids::pointT, t, nullptr);
+            p.setProperty (ids::pointV, v, nullptr);
+            morphConn.addChild (p, -1, nullptr);
+        }
+
+        std::atomic<float> morphMacro { 1.0f };
+        std::vector<std::atomic<float>*> morphMacros { &morphMacro };
+
+        auto settle = [&] (float macroVal)
+        {
+            morphMacro.store (macroVal);
+            auto compiledM = compileGraph (morphModel.state(), morphMacros);
+            GraphEngine eng;
+            eng.prepare (48000.0, 256);
+            eng.setGraph (compiledM);
+            juce::AudioBuffer<float> buf (2, 256);
+            ProcessContext c; c.sampleRate = 48000.0; c.maxBlockSize = 256; c.numSamples = 256;
+            for (int b = 0; b < 400; ++b) { eng.process (buf, c); buf.clear(); }
+            EngineNode* d = nullptr;
+            for (auto& n : compiledM->nodes) if (n->modelNodeId == mDelay) d = n.get();
+            return d->params[(size_t) d->indexOfParam ("mix")].current();
+        };
+
+        expect (settle (1.0f) < 0.05f, "morph curve maps source=1 to output~0 (inverted)");
+        expect (settle (0.0f) > 0.95f, "morph curve maps source=0 to output~1 (inverted)");
+
+        // The compiled connection must carry the sorted morph points.
+        auto compiledMorph = compileGraph (morphModel.state(), morphMacros);
+        EngineNode* dNode = nullptr;
+        for (auto& n : compiledMorph->nodes) if (n->modelNodeId == mDelay) dNode = n.get();
+        auto& mixParam = dNode->params[(size_t) dNode->indexOfParam ("mix")];
+        expect (mixParam.morphPoints.size() == 2, "compiled connection carries its morph points");
+    }
+
     // --- Serialisation round-trip ---------------------------------------
     auto xml = model.state().toXmlString();
     GraphModel restored;

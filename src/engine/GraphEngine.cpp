@@ -1,5 +1,6 @@
 #include "GraphEngine.h"
 #include "HostedPlugin.h"
+#include <algorithm>
 #include <map>
 
 namespace melo
@@ -191,6 +192,15 @@ std::shared_ptr<CompiledGraph> compileGraph (const juce::ValueTree& graphTree,
             param.modSourceIndex = src;
             param.modDepth = child.getProperty (ids::depth, 1.0f);
             param.modOffset = child.getProperty (ids::offset, 0.0f);
+
+            // A drawn morph curve (POINT children) overrides the linear map.
+            for (auto pointTree : child)
+                if (pointTree.hasType (ids::point))
+                    param.morphPoints.push_back ({ pointTree.getProperty (ids::pointT, 0.0f),
+                                                   pointTree.getProperty (ids::pointV, 0.5f),
+                                                   pointTree.getProperty (ids::tension, 0.0f) });
+            std::sort (param.morphPoints.begin(), param.morphPoints.end(),
+                       [] (auto& a, auto& b) { return a.t < b.t; });
         }
         else
         {
