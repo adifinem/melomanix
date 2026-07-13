@@ -198,18 +198,62 @@ private:
             auto [gx, gy] = gridPresets[i];
             menu.addItem (i + 1, gridLabel (gx, gy), true, gx == curX && gy == curY);
         }
+        menu.addSeparator();
+        // Any division count, not just the presets (issue #4 follow-up).
+        menu.addItem (customGridItemId, "Custom...", true, ! isPreset (curX, curY));
 
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&gridButton),
                             [this, node] (int result) mutable
                             {
                                 if (result <= 0)
                                     return;
+                                if (result == customGridItemId)
+                                {
+                                    promptCustomGrid (node);
+                                    return;
+                                }
                                 auto [gx, gy] = gridPresets[result - 1];
                                 node.setProperty (ids::gridX, gx, nullptr);
                                 node.setProperty (ids::gridY, gy, nullptr);
                                 updateGridButton();
                                 repaint();
                             });
+    }
+
+    static constexpr int customGridItemId = 1000;
+
+    static bool isPreset (int gx, int gy)
+    {
+        for (auto& [px, py] : gridPresets)
+            if (px == gx && py == gy)
+                return true;
+        return false;
+    }
+
+    // Free-form grid entry: any non-negative column/row count (0 = free axis).
+    void promptCustomGrid (juce::ValueTree node)
+    {
+        auto window = std::make_shared<juce::AlertWindow> (
+            "Custom grid", "Columns and rows to snap to (0 = free on that axis).",
+            juce::MessageBoxIconType::NoIcon);
+        window->addTextEditor ("cols", juce::String ((int) node.getProperty (ids::gridX, 0)), "Columns (X)");
+        window->addTextEditor ("rows", juce::String ((int) node.getProperty (ids::gridY, 0)), "Rows (Y)");
+        window->addButton ("Set", 1, juce::KeyPress (juce::KeyPress::returnKey));
+        window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+        window->enterModalState (true, juce::ModalCallbackFunction::create (
+            [this, node, window] (int result) mutable
+            {
+                if (result == 1)
+                {
+                    auto gx = juce::jlimit (0, 256, window->getTextEditorContents ("cols").getIntValue());
+                    auto gy = juce::jlimit (0, 256, window->getTextEditorContents ("rows").getIntValue());
+                    node.setProperty (ids::gridX, gx, nullptr);
+                    node.setProperty (ids::gridY, gy, nullptr);
+                    updateGridButton();
+                    repaint();
+                }
+            }), false);
     }
 
     void updateGridButton()
