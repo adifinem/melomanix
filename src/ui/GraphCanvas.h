@@ -71,6 +71,7 @@ private:
     bool glowEnabled() const { return (bool) model.state().getProperty (ids::cableGlow, false); }
     void applyPaletteFromModel();
     void showAppearanceMenu();
+    void showPaletteEditor();
     std::unique_ptr<juce::FileChooser> pluginChooser;
     juce::KnownPluginList installedPlugins;
     bool scannedPlugins = false;

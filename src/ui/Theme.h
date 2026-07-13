@@ -69,6 +69,33 @@ namespace melo::theme
             }
     }
 
+    // Roles the user can recolour freely (issue #8). Pointers target the
+    // live globals above; message-thread only. Stored in the project as
+    // "col_<key>" properties on the graph root so a custom scheme travels
+    // with the patch.
+    struct ColourRole { const char* key; const char* label; juce::Colour* target; };
+
+    inline std::vector<ColourRole> customisableRoles()
+    {
+        return {
+            { "background",    "Background",   &background },
+            { "panel",         "Panels",       &panel },
+            { "nodeBody",      "Node body",    &nodeBody },
+            { "headerDsp",     "DSP header",   &headerDsp },
+            { "headerCtrl",    "Ctrl header",  &headerCtrl },
+            { "audioSignal",   "Audio cables", &audioSignal },
+            { "controlSignal", "Ctrl cables",  &controlSignal },
+            { "text",          "Text",         &text },
+            { "nodeSelected",  "Selection",    &nodeSelected },
+            { "playhead",      "Playhead",     &playhead },
+        };
+    }
+
+    inline juce::Identifier colourPropertyFor (const char* key)
+    {
+        return juce::Identifier ("col_" + juce::String (key));
+    }
+
     inline juce::Colour headerFor (NodeKind kind)
     {
         switch (kind)

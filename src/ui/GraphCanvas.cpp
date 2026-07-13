@@ -1,4 +1,5 @@
 #include "GraphCanvas.h"
+#include "PaletteEditor.h"
 #include "../engine/HostedPlugin.h"
 #include <set>
 
@@ -22,7 +23,25 @@ GraphCanvas::GraphCanvas (GraphModel& m, SelectionModel& sel, std::function<doub
 
 void GraphCanvas::applyPaletteFromModel()
 {
-    theme::applyPalette (model.state().getProperty (ids::palette, "Slate").toString());
+    auto name = model.state().getProperty (ids::palette, "Slate").toString();
+
+    if (name == "Custom")
+    {
+        // Start from Slate, then overlay any per-role colours saved with the
+        // project (issue #8). Missing roles keep the Slate value.
+        theme::applyPalette ("Slate");
+        for (auto& role : theme::customisableRoles())
+        {
+            auto id = theme::colourPropertyFor (role.key);
+            if (model.state().hasProperty (id))
+                *role.target = juce::Colour::fromString (model.state().getProperty (id).toString());
+        }
+        theme::currentPaletteName = "Custom";
+    }
+    else
+    {
+        theme::applyPalette (name);
+    }
 }
 
 GraphCanvas::~GraphCanvas()
@@ -270,6 +289,7 @@ void GraphCanvas::showAddNodeMenu (juce::Point<int> canvasPos)
     for (int i = 0; i < (int) theme::palettes().size(); ++i)
         appearance.addItem (200 + i, theme::palettes()[(size_t) i].name, true,
                             theme::currentPaletteName == theme::palettes()[(size_t) i].name);
+    appearance.addItem (250, "Custom colours...", true, theme::currentPaletteName == "Custom");
     appearance.addSeparator();
     appearance.addItem (300, "Cable glow (live values)", true, glowEnabled());
     menu.addSubMenu ("Appearance", appearance);
@@ -284,7 +304,8 @@ void GraphCanvas::showAddNodeMenu (juce::Point<int> canvasPos)
                             if (result == 5) showInstalledPluginsMenu (canvasPos, contentPos);
                             if (result == 6) chooseAndLoadPlugin (contentPos);
 
-                            if (result >= 200 && result < 300)
+                            if (result == 250) showPaletteEditor();
+                            if (result >= 200 && result < 250)
                             {
                                 auto& chosen = theme::palettes()[(size_t) (result - 200)];
                                 model.state().setProperty (ids::palette, chosen.name, nullptr);
@@ -299,6 +320,19 @@ void GraphCanvas::showAddNodeMenu (juce::Point<int> canvasPos)
                                 repaint();
                             }
                         });
+}
+
+void GraphCanvas::showPaletteEditor()
+{
+    auto editor = std::make_unique<PaletteEditor> (model, [this]
+    {
+        model.state().setProperty (ids::palette, "Custom", nullptr);
+        if (auto* top = getTopLevelComponent())
+            top->repaint();
+    });
+
+    auto anchor = localAreaToGlobal (juce::Rectangle<int> (getWidth() / 2, 40, 1, 1));
+    juce::CallOutBox::launchAsynchronously (std::move (editor), anchor, nullptr);
 }
 
 void GraphCanvas::showInstalledPluginsMenu (juce::Point<int> canvasPos, juce::Point<float> contentPos)
