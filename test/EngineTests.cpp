@@ -4,6 +4,7 @@
 #include "../src/model/GraphModel.h"
 #include "../src/engine/GraphEngine.h"
 #include "../src/engine/HostedPlugin.h"
+#include "../src/engine/Transport.h"
 
 #include <iostream>
 
@@ -378,6 +379,70 @@ int main()
         auto mixB = dB->params[(size_t) dB->indexOfParam ("mix")].current();
         expect (std::abs (mixA - 0.6f) < 0.03f, "xyz Y output (0.6) routes independently to delayA.mix");
         expect (std::abs (mixB - 0.9f) < 0.03f, "xyz Z output (0.9) routes independently to delayB.mix");
+    }
+
+    // --- Transport clock: LFO determinism across stop/play ---------------
+    {
+        // A host that reports musical position (ppq) but no seconds — the
+        // case that made LFO-modulated params random every stop/play.
+        auto t0 = resolveTransportTime (true, 0.0, false, 999.0, 120.0);   // "seconds" here is a bogus free-run
+        auto t1 = resolveTransportTime (true, 0.0, false, 40.0,  120.0);   // second play: free-run has advanced
+        expect (juce::approximatelyEqual (t0.seconds, 0.0) && juce::approximatelyEqual (t1.seconds, 0.0),
+                "beat 0 always resolves to seconds 0 regardless of any free-running clock");
+
+        auto tb = resolveTransportTime (true, 4.0, false, 0.0, 120.0);
+        expect (juce::approximatelyEqual (tb.seconds, 2.0),
+                "4 beats at 120bpm resolves to 2.0s");
+
+        // Standalone / no host position: seconds passes through, beats derived.
+        auto tf = resolveTransportTime (false, 0.0, false, 3.0, 120.0);
+        expect (juce::approximatelyEqual (tf.seconds, 3.0) && juce::approximatelyEqual (tf.beats, 6.0),
+                "no host position: free-running seconds pass through");
+
+        // End to end: an LFO fed transport-resolved time gives the SAME output
+        // at the same musical position on two separate "plays".
+        GraphModel lfoModel;
+        int lIn = -1, lOut = -1;
+        for (auto c : lfoModel.state())
+            if (c.hasType (ids::node))
+            {
+                auto tt = c.getProperty (ids::type).toString();
+                if (tt == "audioIn")  lIn  = c.getProperty (ids::nodeId);
+                if (tt == "audioOut") lOut = c.getProperty (ids::nodeId);
+            }
+        juce::ignoreUnused (lIn, lOut);
+        auto lDelay = lfoModel.addNode (NodeType::delay, 0.0f, 0.0f);
+        auto lfo    = lfoModel.addNode (NodeType::lfo, 0.0f, 100.0f);
+        lfoModel.setParamValue (lfo, "rate", 3.0f);   // free-Hz
+        lfoModel.setParamValue (lfo, "sync", 0.0f);
+        expect (lfoModel.addModConnection (lfo, lDelay, "mix"), "transport: lfo -> delay.mix");
+
+        std::vector<std::atomic<float>*> noMacros;
+        auto play = [&] (double startFreeRun)
+        {
+            auto compiled = compileGraph (lfoModel.state(), noMacros);
+            GraphEngine eng; eng.prepare (48000.0, 256); eng.setGraph (compiled);
+            juce::AudioBuffer<float> buf (2, 256);
+            EngineNode* d = nullptr;
+            for (auto& n : compiled->nodes) if (n->modelNodeId == lDelay) d = n.get();
+            // Walk beats 0..~1, resolving time as the processor now does. The
+            // "free-run" offset stands in for a clock that used to leak in.
+            double lastMix = 0.0;
+            for (int b = 0; b < 64; ++b)
+            {
+                double beats = b * (1.0 / 64.0);
+                auto tt = resolveTransportTime (true, beats, false, startFreeRun + b, 120.0);
+                ProcessContext c; c.sampleRate = 48000.0; c.maxBlockSize = 256; c.numSamples = 256;
+                c.playheadSeconds = tt.seconds; c.playheadBeats = tt.beats; c.bpm = 120.0;
+                eng.process (buf, c); buf.clear();
+                lastMix = d->params[(size_t) d->indexOfParam ("mix")].current();
+            }
+            return lastMix;
+        };
+        auto playA = play (0.0);
+        auto playB = play (1000.0);   // a very different free-running clock
+        expect (std::abs (playA - playB) < 1.0e-4f,
+                "LFO-modulated param is identical across plays (transport-locked, was random)");
     }
 
     // --- Serialisation round-trip ---------------------------------------

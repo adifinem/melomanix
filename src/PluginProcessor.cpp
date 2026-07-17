@@ -71,31 +71,41 @@ void MelomanixProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     for (int ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
         buffer.clear (ch, 0, buffer.getNumSamples());
 
-    // Prefer the host's transport time so LFO phase follows the project
-    // playhead; fall back to a free-running clock (standalone, or hosts
-    // that don't report position).
-    double seconds = internalClockSeconds;
-    bool haveHostTime = false;
-    std::optional<double> hostBeats;
+    // Resolve the transport clock. The host's musical position is canonical
+    // when present, so LFO phase (seconds-based) resets with the transport
+    // just like curve phase (beats-based) — see resolveTransportTime. Only a
+    // host with no position at all falls back to the free-running clock.
+    bool haveHostSeconds = false, haveHostBeats = false;
+    double hostSeconds = 0.0, hostBeats = 0.0;
 
     if (auto* playHead = getPlayHead())
         if (auto position = playHead->getPosition())
         {
-            if (auto time = position->getTimeInSeconds())
-            {
-                seconds = *time;
-                haveHostTime = true;
-            }
             if (auto bpm = position->getBpm())
                 lastBpm.store (*bpm);
+            if (auto time = position->getTimeInSeconds())
+            {
+                hostSeconds = *time;
+                haveHostSeconds = true;
+            }
             if (auto ppq = position->getPpqPosition())
+            {
                 hostBeats = *ppq;
+                haveHostBeats = true;
+            }
         }
 
-    if (! haveHostTime)
+    if (! haveHostBeats && ! haveHostSeconds)
+    {
         internalClockSeconds += buffer.getNumSamples() / currentSampleRate;
+        hostSeconds = internalClockSeconds;
+    }
 
-    auto beats = hostBeats.value_or (seconds * lastBpm.load() / 60.0);
+    auto transport = melo::resolveTransportTime (haveHostBeats, hostBeats,
+                                                 haveHostSeconds, hostSeconds,
+                                                 lastBpm.load());
+    auto seconds = transport.seconds;
+    auto beats = transport.beats;
     lastPlayheadSeconds.store (seconds);
     lastPlayheadBeats.store (beats);
 

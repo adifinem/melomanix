@@ -4,6 +4,7 @@
 #include "model/GraphModel.h"
 #include "engine/GraphEngine.h"
 #include "engine/HostedPlugin.h"
+#include "engine/Transport.h"
 
 class MelomanixProcessor : public juce::AudioProcessor,
                            private juce::ValueTree::Listener,
