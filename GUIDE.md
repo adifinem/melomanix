@@ -50,6 +50,14 @@ Follow-ups from Will's testing of v0.4, plus a new request.
   (there's no redistributable VST2 SDK, and `.fst` is FL-only), so this is the
   build-our-own alternative you suggested.
 
+**Fixed:** LFO-modulated parameters used to land on a different value every
+time you pressed stop→play (and could swing to extremes), while curve- and
+macro-modulated ones behaved — so only *some* parameters looked "random". An
+LFO's phase followed the playhead in **seconds**, and in hosts that report a
+musical position but no seconds (FL Studio), that seconds clock free-ran and
+never reset with the transport. LFO phase is now anchored to the musical
+position like everything else, so a patch plays back identically every time.
+
 [#4]: ../../issues/4
 [#7]: ../../issues/7
 [#8]: ../../issues/8
